@@ -51,37 +51,37 @@ export class DefaultToolMonitor implements ToolMonitor {
    * 1. 获取或创建该工具的统计数据（首次调用时初始化为零）
    * 2. 调用次数 +1
    * 3. 累计耗时加上本次耗时
-   * 4. 重新计算平均耗时（总耗时 / 调用次数，向下取整）
-   * 5. 如果失败，错误次数 +1
-   * 6. 更新最后一次调用时间
+   * 4. 如果成功，successCount +1；否则 failCount +1
    *
-   * @param name       - 工具名称
+   * @param tool       - 工具名称
    * @param durationMs - 本次调用耗时（毫秒）
    * @param success    - 是否成功（result.success === true）
    */
-  record(name: string, durationMs: number, success: boolean): void {
+  record(tool: string, durationMs: number, success: boolean): void {
     // 获取已有统计数据，如果是首次调用则创建初始对象
-    const s = this.stats.get(name) ?? { calls: 0, errors: 0, totalMs: 0, avgMs: 0 };
+    const s = this.stats.get(tool) ?? { calls: 0, totalMs: 0, successCount: 0, failCount: 0, errors: [] };
 
     // 累加统计数据
-    s.calls++;                                // 调用次数 +1
-    s.totalMs += durationMs;                  // 累计耗时
-    s.avgMs = Math.round(s.totalMs / s.calls); // 重新计算平均值
-    if (!success) s.errors++;                 // 失败次数 +1
-    s.lastCall = new Date().toISOString();    // 记录时间戳
+    s.calls++;
+    s.totalMs += durationMs;
+    if (success) {
+      s.successCount++;
+    } else {
+      s.failCount++;
+    }
 
-    // 更新 Map（引用已修改，但需要 set 以触发 Map 的内部更新）
-    this.stats.set(name, s);
+    // 更新 Map
+    this.stats.set(tool, s);
   }
 
   /**
    * 获取单个工具的统计数据
    *
-   * @param name - 工具名称
+   * @param tool - 工具名称
    * @returns 统计数据，未找到返回 undefined
    */
-  getStats(name: string): ToolStats | undefined {
-    return this.stats.get(name);
+  getStats(tool: string): ToolStats | undefined {
+    return this.stats.get(tool);
   }
 
   /**
@@ -122,8 +122,10 @@ export class DefaultToolMonitor implements ToolMonitor {
     const lines: string[] = ["📊 工具使用统计:\n"];
     for (const [name, s] of this.stats) {
       // 计算成功率：(成功次数 / 总次数) * 100，保留 1 位小数
-      const rate = s.calls > 0 ? (((s.calls - s.errors) / s.calls) * 100).toFixed(1) : "0.0";
-      lines.push(`  ${name}: 调用 ${s.calls} 次 | 平均 ${s.avgMs}ms | 成功率 ${rate}%`);
+      const rate = s.calls > 0 ? ((s.successCount / s.calls) * 100).toFixed(1) : "0.0";
+      // 计算平均耗时（动态计算，不在 stats 中存储）
+      const avg = s.calls > 0 ? Math.round(s.totalMs / s.calls) : 0;
+      lines.push(`  ${name}: 调用 ${s.calls} 次 | 平均 ${avg}ms | 成功率 ${rate}%`);
     }
     return lines.join("\n");
   }

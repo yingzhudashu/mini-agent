@@ -477,12 +477,12 @@ async function deleteFileHandler(args: Record<string, unknown>, ctx: ToolContext
  * - list_dir/create_dir/move_file/copy_file/delete_file → "dir_ops"（目录操作）
  */
 export const filesystemTools: Record<string, ToolDefinition> = {
-  read_file: { schema: readFileSchema, handler: readFileHandler, permission: "sandbox", help: "读取文件内容", category: "file_read" },
-  write_file: { schema: writeFileSchema, handler: writeFileHandler, permission: "sandbox", help: "写入/创建文件", category: "file_write" },
-  edit_file: { schema: editFileSchema, handler: editFileHandler, permission: "sandbox", help: "精确替换文件中的文本", category: "file_write" },
-  list_dir: { schema: listDirSchema, handler: listDirHandler, permission: "sandbox", help: "列出目录内容", category: "dir_ops" },
-  create_dir: { schema: createDirSchema, handler: createDirHandler, permission: "sandbox", help: "创建目录", category: "dir_ops" },
-  move_file: { schema: moveFileSchema, handler: moveFileHandler, permission: "sandbox", help: "移动/重命名文件", category: "dir_ops" },
-  copy_file: { schema: copyFileSchema, handler: copyFileHandler, permission: "sandbox", help: "复制文件", category: "dir_ops" },
-  delete_file: { schema: deleteFileSchema, handler: deleteFileHandler, permission: "require-confirm", help: "删除文件/目录（危险）", category: "dir_ops" },
+  read_file: { schema: readFileSchema, handler: readFileHandler, permission: "sandbox", help: "读取文件内容", toolbox: "file_read" },
+  write_file: { schema: writeFileSchema, handler: writeFileHandler, permission: "sandbox", help: "写入/创建文件", toolbox: "file_write" },
+  edit_file: { schema: editFileSchema, handler: editFileHandler, permission: "sandbox", help: "精确替换文件中的文本", toolbox: "file_write" },
+  list_dir: { schema: listDirSchema, handler: listDirHandler, permission: "sandbox", help: "列出目录内容", toolbox: "dir_ops" },
+  create_dir: { schema: createDirSchema, handler: createDirHandler, permission: "sandbox", help: "创建目录", toolbox: "dir_ops" },
+  move_file: { schema: moveFileSchema, handler: moveFileHandler, permission: "sandbox", help: "移动/重命名文件", toolbox: "dir_ops" },
+  copy_file: { schema: copyFileSchema, handler: copyFileHandler, permission: "sandbox", help: "复制文件", toolbox: "dir_ops" },
+  delete_file: { schema: deleteFileSchema, handler: deleteFileHandler, permission: "require-confirm", help: "删除文件/目录（危险）", toolbox: "dir_ops" },
 };

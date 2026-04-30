@@ -189,6 +189,6 @@ async function timeHandler(args: Record<string, unknown>): Promise<ToolResult> {
 // ============================================================================
 
 export const webTools: Record<string, ToolDefinition> = {
-  fetch_url: { schema: fetchUrlSchema, handler: fetchUrlHandler, permission: "sandbox", help: "抓取网页内容并提取文本", category: "web" },
-  get_time: { schema: timeSchema, handler: timeHandler, permission: "sandbox", help: "获取当前时间和日期", category: "core" },
+  fetch_url: { schema: fetchUrlSchema, handler: fetchUrlHandler, permission: "sandbox", help: "抓取网页内容并提取文本", toolbox: "web" },
+  get_time: { schema: timeSchema, handler: timeHandler, permission: "sandbox", help: "获取当前时间和日期", toolbox: "core" },
 };

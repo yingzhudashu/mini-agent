@@ -180,11 +180,5 @@ async function execHandler(args: Record<string, unknown>, ctx: ToolContext): Pro
  * - 资源限制（CPU 时间、内存上限）
  */
 export const execTools: Record<string, ToolDefinition> = {
-  exec_command: {
-    schema: execSchema,
-    handler: execHandler,
-    permission: "allowlist",
-    help: "执行 shell 命令",
-    category: "exec",
-  },
+  exec_command: { schema: execSchema, handler: execHandler, permission: "allowlist", help: "执行 shell 命令", toolbox: "exec" },
 };
