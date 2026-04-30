@@ -1,0 +1,33 @@
+{
+  "name": "mini-agent",
+  "version": "0.1.0",
+  "description": "A minimal LLM agent with tool calling support — ReAct loop in TypeScript",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "test": "tsx tests/test.ts",
+    "build": "tsc",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "llm",
+    "agent",
+    "react",
+    "tool-calling",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "openai": "^4.77.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
