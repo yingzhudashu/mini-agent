@@ -2,15 +2,46 @@
 
 A minimal LLM agent with **tool calling** support — the ReAct loop implemented in TypeScript.
 
-No heavy frameworks. No boilerplate. Just ~60 lines of core logic.
+No heavy frameworks. No boilerplate. Just a clean architecture that **goes beyond OpenClaw**.
 
 ## Features
 
-- 🧠 **ReAct Loop** — LLM → tool call → execute → result → response
-- 🔧 **Tool Calling** — OpenAI-compatible function calling API
-- 🌐 **Multi-Provider** — Works with OpenAI, DashScope, SiliconFlow, Ollama, or any OpenAI-compatible endpoint
+- 🧠 **Enhanced ReAct Loop** — LLM → tool call → execute → result → response
+- 🔧 **Dynamic Tool Registry** — Register/unregister tools at runtime
+- 📊 **Performance Monitor** — Track tool usage, speed, and success rates
+- 🔒 **Path Sandbox** — File operations restricted to allowed directories
+- 🛡️ **3-Level Permissions** — `sandbox` / `allowlist` / `require-confirm`
+- 📦 **Cross-Platform** — Build standalone executables for Win/Mac/Linux
 - 🧪 **Typed** — Full TypeScript support
-- 📦 **Zero Framework** — Only `openai` SDK as dependency
+
+## Architecture
+
+```
+src/
+├── core/
+│   ├── agent.ts       # ReAct loop (registry + monitor)
+│   ├── registry.ts    # Dynamic tool registry
+│   ├── monitor.ts     # Tool performance tracking
+│   └── types.ts       # Type definitions
+├── tools/
+│   ├── filesystem.ts  # 8 tools: read/write/edit/list/create/move/copy/delete
+│   ├── exec.ts        # 1 tool: command execution (timeout/PTY)
+│   └── web.ts         # 2 tools: web fetch + time
+├── security/
+│   └── sandbox.ts     # Path validation
+├── cli.ts             # Interactive CLI
+└── index.ts           # Barrel exports
+```
+
+## Tools
+
+| Category | Tools |
+|----------|-------|
+| **文件** | `read_file`, `write_file`, `edit_file`, `list_dir`, `create_dir`, `move_file`, `copy_file`, `delete_file` |
+| **命令** | `exec_command` |
+| **网络** | `fetch_url`, `get_time` |
+
+**11 个工具** — 全部开箱即用，无需外部服务。
 
 ## Quick Start
 
@@ -29,6 +60,13 @@ npm start       # Interactive chat
 npm test        # Run integration tests
 ```
 
+### CLI Commands
+
+Inside the interactive chat:
+- `.tools` — List all available tools
+- `.stats` — Show tool usage statistics
+- `quit` / `exit` — Exit
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -36,6 +74,7 @@ npm test        # Run integration tests
 | `OPENAI_API_KEY` | Your API key | *(required)* |
 | `OPENAI_BASE_URL` | API endpoint | `https://api.openai.com/v1` |
 | `OPENAI_MODEL` | Model name | `gpt-4o-mini` |
+| `MINI_AGENT_WORKSPACE` | Allowed workspace root | `process.cwd()` |
 
 ### Example Configurations
 
@@ -53,77 +92,6 @@ OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 OPENAI_MODEL=qwen-plus
 ```
 
-**SiliconFlow:**
-```env
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.siliconflow.cn/v1
-OPENAI_MODEL=Qwen/Qwen2.5-72B-Instruct
-```
-
-**Ollama (local):**
-```env
-OPENAI_API_KEY=ollama
-OPENAI_BASE_URL=http://localhost:11434/v1
-OPENAI_MODEL=qwen2.5:7b
-```
-
-## Architecture
-
-```
-┌─────────┐     ┌──────────┐     ┌─────────┐
-│  User   │────▶│  Agent   │────▶│   LLM   │
-│  Input  │     │  Loop    │     │  API    │
-└─────────┘     └────┬─────┘     └────┬────┘
-                     │                │
-               ┌─────▼─────┐          │
-               │   Tools   │◀─────────┘
-               │ (weather) │  tool_call
-               └───────────┘
-```
-
-## Project Structure
-
-```
-mini-agent/
-├── src/
-│   ├── agent.ts          # Core ReAct loop (exported)
-│   ├── cli.ts            # Interactive CLI entry point
-│   ├── index.ts          # Barrel exports
-│   └── tools/
-│       └── weather.ts    # Tool definitions & handlers
-├── tests/
-│   └── test.ts           # Integration tests
-├── .env.example          # Environment template
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-## API Usage
-
-```typescript
-import { runAgent } from "./src/index.js";
-
-// Simple call
-const reply = await runAgent("北京天气怎么样？");
-console.log(reply);
-
-// With custom callback
-const reply = await runAgent("上海天气如何？", {
-  onToolCall: (name, args, result) => {
-    console.log(`Tool: ${name}, Result: ${result}`);
-  },
-});
-```
-
-## Adding New Tools
-
-1. Create a tool in `src/tools/`
-2. Add handler to `toolHandlers`
-3. Add definition to `allTools` array
-
-See `src/tools/weather.ts` for reference.
-
 ## Building Standalone Executables
 
 Build platform-specific binaries that **don't require Node.js**:
@@ -135,12 +103,49 @@ npm run pkg:linux  # Linux (x64 + ARM64)
 npm run pkg:all    # All platforms
 ```
 
-Output files are saved to `dist/`:
-- `mini-agent-win.exe` — Windows
-- `mini-agent-macos` — macOS
-- `mini-agent-linux` — Linux
+Output files are saved to `dist/`.
 
-> **Note**: Cross-compiling all targets requires the pkg tool to download ~100MB of Node.js binaries on first run. Build each target on its native platform for best results.
+## API Usage
+
+```typescript
+import {
+  runAgent,
+  DefaultToolRegistry,
+  DefaultToolMonitor,
+  filesystemTools,
+  execTools,
+  webTools,
+} from "./src/index.js";
+
+// Setup
+const registry = new DefaultToolRegistry();
+const monitor = new DefaultToolMonitor();
+
+for (const [n, t] of Object.entries(filesystemTools)) registry.register(n, t);
+for (const [n, t] of Object.entries(execTools)) registry.register(n, t);
+for (const [n, t] of Object.entries(webTools)) registry.register(n, t);
+
+// Run
+const reply = await runAgent("读取 package.json", {
+  registry,
+  monitor,
+});
+```
+
+### Adding New Tools
+
+```typescript
+import type { ToolDefinition } from "./src/core/types.js";
+
+const myTool: ToolDefinition = {
+  schema: { /* OpenAI tool schema */ },
+  handler: async (args, ctx) => ({ success: true, content: "Hello!" }),
+  permission: "sandbox",
+  help: "我的工具",
+};
+
+registry.register("my_tool", myTool);
+```
 
 ## License
 
