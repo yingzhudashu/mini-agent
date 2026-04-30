@@ -185,5 +185,6 @@ export const execTools: Record<string, ToolDefinition> = {
     handler: execHandler,
     permission: "allowlist",
     help: "执行 shell 命令",
+    category: "exec",
   },
 };

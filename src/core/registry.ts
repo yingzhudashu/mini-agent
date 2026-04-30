@@ -17,7 +17,7 @@
  */
 
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import type { RegisteredTool, ToolDefinition, ToolRegistry } from "./types.js";
+import type { RegisteredTool, ToolDefinition, ToolCategory, ToolRegistry } from "./types.js";
 
 /**
  * 默认工具注册表实现
@@ -134,5 +134,62 @@ export class DefaultToolRegistry implements ToolRegistry {
    */
   list(): string[] {
     return Array.from(this.tools.keys());
+  }
+
+  /**
+   * 按类别筛选工具的 schema 数组
+   *
+   * 动态工具筛选的核心方法：
+   * 1. 始终包含没有 category 的工具（"核心"工具，默认发送）
+   * 2. 包含所有 category 在筛选列表中的工具
+   * 3. 排除 category 不在筛选列表中的工具
+   *
+   * 使用场景：
+   * - 用户问"现在几点"→ 只传 core 类别的工具
+   * - 用户问"读取文件"→ 传 core + file_read 类别的工具
+   * - 用户问"帮我写代码"→ 传 core + file_read + file_write + exec
+   *
+   * @param categories - 要包含的类别列表。未设置 category 的工具始终包含
+   * @returns 筛选后的 ChatCompletionTool 数组
+   *
+   * @example
+   *   // 只发送核心工具和时间相关工具
+   *   registry.getSchemasByCategories(["core", "time"]);
+   *
+   *   // 发送所有工具（不传 categories 或传空数组 = 不过滤）
+   *   registry.getSchemasByCategories([]);
+   */
+  getSchemasByCategories(categories: ToolCategory[]): ChatCompletionTool[] {
+    // 如果 categories 为空，返回所有工具（向后兼容）
+    if (categories.length === 0) {
+      return this.getSchemas();
+    }
+    const categorySet = new Set(categories);
+    return Array.from(this.tools.values())
+      .filter((t) => !t.category || categorySet.has(t.category))
+      .map((t) => t.schema);
+  }
+
+  /**
+   * 按类别筛选工具定义（包含完整信息，不仅 schema）
+   *
+   * 用于需要访问 handler/permission 等内部信息的场景。
+   * 如果只需要 schema（传给 LLM），用 getSchemasByCategories 即可。
+   *
+   * @param categories - 要包含的类别列表
+   * @returns 筛选后的工具名称到定义的 Map
+   */
+  getByCategories(categories: ToolCategory[]): Map<string, RegisteredTool> {
+    if (categories.length === 0) {
+      return this.getAll();
+    }
+    const categorySet = new Set(categories);
+    const filtered = new Map<string, RegisteredTool>();
+    for (const [name, tool] of this.tools) {
+      if (!tool.category || categorySet.has(tool.category)) {
+        filtered.set(name, tool);
+      }
+    }
+    return filtered;
   }
 }

@@ -31,7 +31,7 @@
  */
 
 // ── 核心模块 ──
-export { runAgent, runPipeline, client, MODEL } from "./core/agent.js";
+export { runAgent, runPipeline, filterCategories, client, MODEL } from "./core/agent.js";
 export { DefaultToolRegistry } from "./core/registry.js";
 export { DefaultToolMonitor } from "./core/monitor.js";
 

@@ -33,6 +33,7 @@ import type {
   ToolMonitor,
   AgentOptions,
   ToolContext,
+  ToolCategory,
   PipelineResult,
   PipelineStep,
 } from "./types.js";
@@ -68,6 +69,65 @@ export const client = new OpenAI({
  * - 小模型：可能不会正确使用工具
  */
 export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+// ============================================================================
+// 动态工具筛选
+// ============================================================================
+
+/**
+ * 关键词到工具类别的映射
+ *
+ * 工作原理：
+ * 1. 将用户输入转为小写
+ * 2. 扫描关键词，匹配到对应的工具类别
+ * 3. 返回匹配的类别列表
+ *
+ * 设计原则：
+ * - 关键词应覆盖用户可能的表达方式（如"读文件"、"打开文件"、"查看内容"）
+ * - 关键词应足够具体，避免误匹配
+ * - 如果没有任何关键词匹配，返回空数组 = 使用全部工具（兜底策略）
+ */
+const KEYWORD_MAP: Record<string, ToolCategory[]> = {
+  // 文件读取
+  "file_read": ["读取", "打开文件", "查看内容", "文件内容", "read"],
+  // 文件写入
+  "file_write": ["写入", "保存", "创建文件", "编辑", "修改文件", "替换", "write", "edit"],
+  // 目录操作
+  "dir_ops": ["目录", "文件夹", "列出", "移动文件", "复制文件", "删除", "创建目录", "dir", "list", "move", "copy", "delete"],
+  // 命令执行
+  "exec": ["执行", "命令", "运行", "shell", "exec", "run"],
+  // 网络访问
+  "web": ["网页", "网站", "网址", "链接", "抓取", "fetch", "url", "http", "https"],
+};
+
+/**
+ * 根据用户输入匹配工具类别
+ *
+ * @param userInput - 用户的自然语言输入
+ * @returns 匹配到的工具类别列表（去重），如果没有匹配则返回空数组
+ *
+ * @example
+ *   filterCategories("读取 package.json 的内容");
+ *   // → ["file_read"]
+ *
+ *   filterCategories("现在几点了？");
+ *   // → [] （没有关键词匹配，将使用全部工具）
+ */
+export function filterCategories(userInput: string): ToolCategory[] {
+  const lower = userInput.toLowerCase();
+  const matched = new Set<ToolCategory>();
+
+  for (const [category, keywords] of Object.entries(KEYWORD_MAP)) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) {
+        matched.add(category as ToolCategory);
+        break; // 该类别已匹配，跳过剩余关键词
+      }
+    }
+  }
+
+  return Array.from(matched);
+}
 
 // ============================================================================
 // 工具流水线
@@ -172,6 +232,8 @@ export async function runAgent(
     systemPrompt?: string;
     maxTurns?: number;
     onToolCall?: (name: string, args: string, result: string) => void;
+    /** 手动指定工具类别。不设置则自动根据关键词匹配 */
+    categories?: ToolCategory[];
   },
 ): Promise<string> {
   // ── 参数初始化 ──
@@ -183,6 +245,14 @@ export async function runAgent(
   const maxTurns = options.maxTurns ?? 5;
   // 默认工具调用回调：打印到控制台
   const onToolCall = options.onToolCall ?? ((n, a, r) => console.log(`[工具] ${n}(${a}) → ${r}`));
+
+  // ── 动态工具筛选 ──
+  // 如果手动指定了 categories，使用手动指定；否则根据关键词自动匹配
+  const categories = options.categories ?? filterCategories(userInput);
+  // 如果 categories 为空，使用全部工具（兜底策略）
+  const tools = categories.length > 0
+    ? registry.getSchemasByCategories(categories)
+    : registry.getSchemas();
 
   // ── 构建执行上下文 ──
 
@@ -227,11 +297,33 @@ export async function runAgent(
     // 记录本轮 LLM 请求的开始时间
     const startMs = Date.now();
 
+    // 打印完整请求内容（调试用）
+    console.log("\n" + "═".repeat(60));
+    console.log("📨 发送给 LLM 的完整请求:");
+    console.log("─".repeat(60));
+    console.log(`模型: ${MODEL}`);
+    console.log(`消息数: ${messages.length}`);
+    console.log("\n📝 messages:");
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      const content = typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+      const short = content.length > 200 ? content.slice(0, 200) + "..." : content;
+      console.log(`  [${i}] role=${m.role} | content: ${short}`);
+    }
+    console.log("\n🔧 tools schemas (JSON):");
+    console.log(JSON.stringify(tools, null, 2));
+    if (categories.length > 0) {
+      console.log(`\n📊 动态筛选: 匹配到类别 [${categories.join(", ")}]，使用 ${tools.length}/${registry.list().length} 个工具`);
+    } else {
+      console.log(`\n📊 动态筛选: 无关键词匹配，使用全部 ${tools.length} 个工具`);
+    }
+    console.log("═".repeat(60) + "\n");
+
     // 发送请求给 LLM
     const response = await client.chat.completions.create({
       model: MODEL,
       messages,
-      tools: registry.getSchemas(),  // 将注册的所有工具 schema 传给 LLM
+      tools,  // 使用筛选后的工具 schema
     });
 
     const msg = response.choices[0].message;

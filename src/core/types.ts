@@ -91,13 +91,34 @@ export interface ToolResult {
 export type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<ToolResult>;
 
 /**
+ * 工具类别 — 用于动态工具筛选
+ *
+ * 每个类别对应一组相关工具。Agent 根据用户输入的意图匹配类别，
+ * 只将相关工具的 schema 发送给 LLM，节省 token 消耗。
+ *
+ * 设计原则：
+ * - 类别数量应远小于工具总数（理想：3-5 个类别）
+ * - 每个类别内的工具共享相似的用途或操作域
+ * - "core" 类别的工具始终发送（如 get_time、get_date 等基础能力）
+ */
+export type ToolCategory =
+  | "file_read"      // 文件读取
+  | "file_write"     // 文件写入/编辑
+  | "dir_ops"        // 目录操作（列出、创建、移动、删除）
+  | "exec"           // 命令执行
+  | "web"            // 网络访问
+  | "core"           // 核心基础能力（始终发送）
+  | string;          // 允许扩展自定义类别
+
+/**
  * 工具定义 — 描述一个工具的完整信息
  *
- * 每个工具由四个部分组成：
+ * 每个工具由五个部分组成：
  * 1. schema    — OpenAI 兼容的工具描述（告诉 LLM 这个工具能做什么、需要什么参数）
  * 2. handler   — 实际执行函数（Agent 调用时运行）
  * 3. permission — 权限等级（决定是否需要用户确认）
  * 4. help      — 简短帮助文本（用于 .tools 命令显示）
+ * 5. category  — 工具类别（用于动态筛选，可选）
  *
  * @example
  *   const myTool: ToolDefinition = {
@@ -105,6 +126,7 @@ export type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => P
  *     handler: async (args) => ({ success: true, content: "Hello!" }),
  *     permission: "sandbox",
  *     help: "打招呼",
+ *     category: "core",
  *   };
  */
 export interface ToolDefinition {
@@ -116,6 +138,8 @@ export interface ToolDefinition {
   permission: ToolPermission;
   /** 简短描述，用于 `.tools` 命令和监控报告中的显示 */
   help: string;
+  /** 工具类别，用于动态筛选。不设置则该工具始终被发送 */
+  category?: ToolCategory;
 }
 
 // ============================================================================
@@ -188,6 +212,18 @@ export interface ToolRegistry {
    * 用于错误提示（"未知工具，可用工具: xxx, yyy"）
    */
   list(): string[];
+  /**
+   * 按类别筛选工具的 schema 数组
+   * @param categories - 要包含的类别列表。空数组 = 返回全部工具
+   * @returns 筛选后的 ChatCompletionTool 数组
+   */
+  getSchemasByCategories(categories: ToolCategory[]): ChatCompletionTool[];
+  /**
+   * 按类别筛选工具定义
+   * @param categories - 要包含的类别列表。空数组 = 返回全部工具
+   * @returns 筛选后的工具名称到定义的 Map
+   */
+  getByCategories(categories: ToolCategory[]): Map<string, RegisteredTool>;
 }
 
 // ============================================================================
