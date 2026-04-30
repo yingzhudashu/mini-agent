@@ -1,3 +1,25 @@
+/**
+ * @file types.ts — 类型定义
+ * @description
+ *   Mini Agent v3 的所有 TypeScript 接口和类型。
+ *
+ *   类型分类：
+ *   1. Toolbox — 工具箱定义（粗粒度能力分组）
+ *   2. Tool* — 工具相关（定义、上下文、结果、注册表）
+ *   3. ModelConfig / AgentConfig — 双层配置体系
+ *   4. Planning — 规划相关（StructuredPlan、PlanStep、PlanChunk）
+ *   5. Pipeline — 线性管线执行
+ *   6. Stats — 性能监控统计
+ *
+ *   设计原则：
+ *   - 接口尽量小且明确，避免过度抽象
+ *   - 使用 `readonly` 标记不可变字段
+ *   - 可选字段使用 `?` 标注
+ *   - 枚举用联合类型而非 `enum`（更好的 tree-shaking）
+ *
+ * @module core/types
+ */
+
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
 // ============================================================================
