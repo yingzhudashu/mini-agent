@@ -124,6 +124,24 @@ const reply = await runAgent("上海天气如何？", {
 
 See `src/tools/weather.ts` for reference.
 
+## Building Standalone Executables
+
+Build platform-specific binaries that **don't require Node.js**:
+
+```bash
+npm run pkg:win    # Windows (.exe)
+npm run pkg:mac    # macOS (Intel + Apple Silicon)
+npm run pkg:linux  # Linux (x64 + ARM64)
+npm run pkg:all    # All platforms
+```
+
+Output files are saved to `dist/`:
+- `mini-agent-win.exe` — Windows
+- `mini-agent-macos` — macOS
+- `mini-agent-linux` — Linux
+
+> **Note**: Cross-compiling all targets requires the pkg tool to download ~100MB of Node.js binaries on first run. Build each target on its native platform for best results.
+
 ## License
 
 MIT
