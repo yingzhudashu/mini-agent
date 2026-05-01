@@ -75,4 +75,5 @@ export { inspectSelf } from "./core/self-opt/inspector.js";
 export { researchExternal } from "./core/self-opt/researcher.js";
 export { generateProposals, formatProposals } from "./core/self-opt/proposal-engine.js";
 export { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
+export { generateFixDiff } from "./core/self-opt/diff-generator.js";
 export type * from "./core/self-opt/types.js";

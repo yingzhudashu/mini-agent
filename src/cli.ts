@@ -1,7 +1,7 @@
 /**
  * @file cli.ts — CLI 交互入口
  * @description
- *   Mini Agent v4.2 的用户界面层，负责初始化所有子系统并启动交互循环。
+ *   Mini Agent v4.3 的用户界面层，负责初始化所有子系统并启动交互循环。
  *
  *   职责：
  *   1. 加载 .env 环境变量
@@ -68,7 +68,7 @@ import { selfOptTools } from "./tools/self-opt.js";
 import { inspectSelf } from "./core/self-opt/inspector.js";
 import { researchExternal } from "./core/self-opt/researcher.js";
 import { generateProposals, formatProposals } from "./core/self-opt/proposal-engine.js";
-import { runProposalTests, formatTestResults } from "./core/self-opt/self-test-runner.js";
+import { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
 
 /** ESM 下手动获取 __dirname */
 const __filename = fileURLToPath(import.meta.url);
@@ -143,7 +143,7 @@ async function main() {
   const skillPrompts = skillRegistry.getSystemPrompts();
 
   // ── 显示欢迎信息 ──
-  console.log("🤖 Mini Agent v4.2 已启动");
+  console.log("🤖 Mini Agent v4.3 已启动");
   console.log(`📡 模型: ${MODEL} | 预设: ${activeProfile}`);
   console.log(`📂 工作空间: ${getDefaultWorkspace()}`);
   console.log(`🧰 工具箱: ${allToolboxes.map(t => t.name).join(", ")}`);
@@ -326,6 +326,32 @@ async function main() {
           for (const ref of report.references.slice(0, 10)) { const icon = ref.type === "paper" ? "📑" : "💻"; lines.push(`  ${icon} [${ref.type}] ${ref.title} ⭐${ref.relevance}/10`); lines.push(`     ${ref.url}`); }
           lines.push(`\n📝 ${report.summary}`);
           outputManager.write(lines.join("\n"));
+        } else if (subCmd === "auto") {
+          outputManager.write("\n🚀 全自动优化...");
+          outputManager.write("\n[1/3] 🔍 自我审视...");
+          const inspectReport = await inspectSelf(srcDir);
+          outputManager.write(`  ✅ 架构: ${inspectReport.architectureChecks.filter((c) => c.passed).length}/${inspectReport.architectureChecks.length}`);
+          outputManager.write("\n[2/3] 🌐 外部调研...");
+          const researchReport = await researchExternal();
+          outputManager.write(`  ✅ 找到 ${researchReport.references.length} 个资源`);
+          outputManager.write("\n[3/3] 📋 生成并执行提案...");
+          const proposals = generateProposals(inspectReport, researchReport);
+          const lowRisk = proposals.filter((p) => p.riskLevel === "low");
+          outputManager.write(`  🟢 低风险: ${lowRisk.length} 个（自动执行）`);
+          const otherRisk = proposals.filter((p) => p.riskLevel !== "low");
+          if (otherRisk.length > 0) outputManager.write(`  ⚠️ 中高风险: ${otherRisk.length} 个（需手动处理）`);
+          if (lowRisk.length === 0) {
+            outputManager.write("\n💡 没有低风险提案，无需自动执行");
+          } else {
+            outputManager.write("\n  ⚠️ 自动执行功能待完整实现（需要 LLM 生成代码变更）");
+            for (const p of lowRisk) {
+              outputManager.write(`  📌 ${p.target}: ${p.description}`);
+            }
+          }
+          outputManager.write("\n" + "═".repeat(55));
+          outputManager.write("📋 优化完成");
+          outputManager.write("═".repeat(55));
+          outputManager.write(formatProposals(proposals));
         } else if (subCmd === "propose") {
           outputManager.write("\n📋 生成优化提案...");
           const inspectReport = await inspectSelf(srcDir);
@@ -345,7 +371,7 @@ async function main() {
           outputManager.writeLines(["", "═══════════════════════════════════════════════════", "📋 自我优化完成", "═══════════════════════════════════════════════════"]);
           outputManager.write(`📝 架构: ${inspectReport.summary}`);
           outputManager.write(`🌐 调研: ${researchReport.summary}`);
-          outputManager.writeLines(["", "💡 子命令:", "  .optimize inspect   — 完整审视报告", "  .optimize research  — 完整调研报告", "  .optimize propose   — 生成优化提案"]);
+          outputManager.writeLines(["", "💡 子命令:", "  .optimize inspect   — 完整审视报告", "  .optimize research  — 完整调研报告", "  .optimize propose   — 生成优化提案", "  .optimize auto      — 全自动优化"]);
         }
       } catch (err: any) { outputManager.write(`\n❌ 自我优化失败: ${err?.message ?? err}`); }
       finally { outputManager.endOutput(); }

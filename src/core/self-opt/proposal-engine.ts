@@ -22,6 +22,7 @@ import type {
   ResearchReport,
   OptimizationProposal,
   TestCase,
+  FileChange,
 } from "./types.js";
 
 // ============================================================================
@@ -172,6 +173,85 @@ const PROPOSAL_TEMPLATES: ProposalTemplate[] = [
 ];
 
 // ============================================================================
+// 文件变更生成（Phase 4）
+// ============================================================================
+
+/**
+ * 根据模板和审视报告生成文件变更计划
+ * Phase 4: 为提案预生成文件变更，便于 executeOptimization 直接应用
+ */
+function generateFileChanges(
+  template: ProposalTemplate,
+  inspection: InspectionReport,
+): FileChange[] {
+  const changes: FileChange[] = [];
+
+  // 根据模板类型生成不同的变更计划
+  if (template.matchPainPoints.some((p) => p.includes("测试") || p.includes("hasTests"))) {
+    // 为没有测试的模块生成测试文件变更计划
+    const untested = inspection.moduleAnalysis.filter(
+      (m) => !m.hasTests && m.linesOfCode > 50,
+    );
+    for (const m of untested.slice(0, 3)) {
+      const testPath = `tests/${m.path.replace(/\.ts$/, ".test.ts").replace(/src\//, "")}`;
+      changes.push({
+        path: testPath,
+        action: "create",
+        content: generateTestFileSkeleton(m),
+        description: `为 ${m.path} 添加单元测试骨架`,
+      });
+    }
+  }
+
+  if (template.matchPainPoints.some((p) => p.includes("any 类型") || p.includes("类型安全"))) {
+    // 标记需要修复 any 类型的文件
+    const filesWithAny = inspection.moduleAnalysis
+      .filter((m) => m.issues.some((i) => i.includes("any")))
+      .slice(0, 3);
+    for (const m of filesWithAny) {
+      changes.push({
+        path: m.path,
+        action: "modify",
+        description: `替换 ${m.path} 中的 any 类型为精确类型`,
+      });
+    }
+  }
+
+  if (template.matchPainPoints.some((p) => p.includes("空 catch"))) {
+    const filesWithEmptyCatch = inspection.moduleAnalysis
+      .filter((m) => m.issues.some((i) => i.includes("catch") || i.includes("空")))
+      .slice(0, 3);
+    for (const m of filesWithEmptyCatch) {
+      changes.push({
+        path: m.path,
+        action: "modify",
+        description: `为 ${m.path} 的空 catch 块添加错误处理`,
+      });
+    }
+  }
+
+  return changes;
+}
+
+/** 生成测试文件骨架 */
+function generateTestFileSkeleton(module: { path: string; exportsCount: number }): string {
+  const moduleName = module.path.replace(/.*[/\\]/, "").replace(".ts", "");
+  return `import { describe, it } from 'node:test';
+import assert from 'node:assert';
+
+// TODO: 导入 ${moduleName} 模块
+// import { } from '../src/${moduleName}';
+
+describe('${moduleName}', () => {
+  it('should exist', () => {
+    // TODO: 实现测试逻辑
+    assert.ok(true);
+  });
+});
+`;
+}
+
+// ============================================================================
 // 主入口
 // ============================================================================
 
@@ -209,7 +289,7 @@ export function generateProposals(
       description: template.description(inspection),
       rationale: template.rationale(research),
       expectedBenefit: template.benefit,
-      files: [],
+      files: generateFileChanges(template, inspection), // Phase 4: 生成实际文件变更计划
       dependencies: template.dependencies,
       testCases,
       rollbackPlan: "Git reset 到变更前的快照",

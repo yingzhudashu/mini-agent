@@ -2,11 +2,12 @@
  * @file self-test-runner.ts — Self-Test Runner 自动测试执行器
  * @description
  *   执行优化提案的测试用例，支持失败自动修复循环。
+ *   Phase 4 更新：集成 diff-generator 实现 LLM 驱动的自动修复。
  *
  *   工作流程：
  *   1. 依次执行提案中的测试用例
  *   2. 全部通过 → 标记成功
- *   3. 有失败 → 尝试自动修复（最多 2 次）
+ *   3. 有失败 → 调用 diff-generator 生成修复补丁 → 应用 → 重试（最多 2 次）
  *   4. 修复后仍失败 → 标记失败，建议回滚
  *
  *   安全规则：
@@ -18,7 +19,15 @@
  */
 
 import { spawn } from "node:child_process";
-import type { OptimizationProposal, OptimizationResult, TestExecutionResult } from "./types.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import type {
+  OptimizationProposal,
+  OptimizationResult,
+  TestExecutionResult,
+  FileChange,
+} from "./types.js";
+import { generateFixDiff } from "./diff-generator.js";
 
 // ============================================================================
 // 配置
@@ -70,7 +79,7 @@ function isCommandSafe(command: string): { safe: boolean; reason?: string } {
 function executeTestCommand(
   command: string,
   cwd: string,
-  timeoutMs: number = TEST_TIMEOUT_SECONDS * 1000
+  timeoutMs: number = TEST_TIMEOUT_SECONDS * 1000,
 ): Promise<{ passed: boolean; output: string; durationMs: number }> {
   return new Promise((resolve) => {
     const startTime = Date.now();
@@ -131,14 +140,10 @@ function executeTestCommand(
 
 /**
  * 执行提案的全部测试用例
- *
- * @param proposal 优化提案
- * @param cwd 项目根目录
- * @returns 测试结果
  */
 export async function runProposalTests(
   proposal: OptimizationProposal,
-  cwd: string
+  cwd: string,
 ): Promise<TestExecutionResult[]> {
   const results: TestExecutionResult[] = [];
 
@@ -159,12 +164,36 @@ export async function runProposalTests(
     results.push({
       testCaseId: tc.id,
       passed: result.passed,
-      output: result.output.slice(0, 2000), // 截断过长输出
+      output: result.output.slice(0, 2000),
       durationMs: result.durationMs,
     });
   }
 
   return results;
+}
+
+/**
+ * 将文件变更应用到磁盘
+ */
+async function applyFileChanges(changes: FileChange[], projectRoot: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    for (const change of changes) {
+      const fullPath = path.isAbsolute(change.path)
+        ? change.path
+        : path.join(projectRoot, change.path);
+      const dir = path.dirname(fullPath);
+
+      if (change.action === "create" || change.action === "modify") {
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fullPath, change.content || "", "utf-8");
+      } else if (change.action === "delete") {
+        if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? String(err) };
+  }
 }
 
 /**
@@ -178,7 +207,7 @@ export async function runProposalTests(
 export async function executeOptimization(
   proposal: OptimizationProposal,
   cwd: string,
-  applyChanges: () => Promise<{ success: boolean; error?: string }>
+  applyChanges: () => Promise<{ success: boolean; error?: string }>,
 ): Promise<OptimizationResult> {
   const startTime = Date.now();
   let fixAttempts = 0;
@@ -211,18 +240,39 @@ export async function executeOptimization(
     status = "success";
     lesson = "所有测试通过，优化成功";
   } else {
-    // ── Step 4: 自动修复循环 ──
+    // ── Step 4: 自动修复循环（Phase 4） ──
+    const srcDir = path.join(cwd, "src");
     while (fixAttempts < MAX_FIX_ATTEMPTS) {
       fixAttempts++;
       console.log(`[self-opt] 测试失败，尝试自动修复 (${fixAttempts}/${MAX_FIX_ATTEMPTS})...`);
 
-      // TODO: 这里需要 LLM 介入分析失败原因并生成修复方案
-      // 当前版本仅记录失败，自动修复需要 Phase 4 实现
-      console.log(`[self-opt] 自动修复逻辑待实现（需要 LLM 分析）`);
-      break;
+      // 调用 LLM 生成修复补丁
+      const fixDiff = await generateFixDiff(proposal, lastResults, srcDir);
+      if (!fixDiff.success) {
+        console.log("[self-opt] 无法生成修复补丁");
+        break;
+      }
+
+      console.log(`[self-opt] 生成 ${fixDiff.changes.length} 个文件变更，应用...`);
+      const fixResult = await applyFileChanges(fixDiff.changes, cwd);
+      if (!fixResult.success) {
+        console.log(`[self-opt] 修复补丁应用失败: ${fixResult.error}`);
+        break;
+      }
+
+      // 重新测试
+      lastResults = await runProposalTests(proposal, cwd);
+      if (lastResults.every((r) => r.passed)) {
+        status = "success";
+        lesson = `自动修复成功（${fixAttempts} 次修复尝试）`;
+        break;
+      }
+      console.log(`[self-opt] 修复后仍有 ${lastResults.filter((r) => !r.passed).length} 个失败`);
     }
 
-    lesson = `测试失败 (${lastResults.filter((r) => !r.passed).length}/${lastResults.length} 未通过)。建议: 检查变更内容或回滚`;
+    if (status !== "success") {
+      lesson = `测试失败 (${lastResults.filter((r) => !r.passed).length}/${lastResults.length} 未通过，${fixAttempts} 次修复)。建议回滚`;
+    }
   }
 
   // ── 汇总 ──
@@ -271,7 +321,7 @@ export function formatTestResults(result: OptimizationResult): string {
 
   if (result.status === "failed") {
     lines.push("");
-    lines.push("💡 建议: 使用 git_snapshot revert 回滚到变更前的状态");
+    lines.push("💡 建议: 回滚到变更前的状态");
   }
 
   return lines.join("\n");
