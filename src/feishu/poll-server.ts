@@ -40,12 +40,20 @@ export async function startFeishuPollServer(
   }).register({
     'im.message.receive_v1': async (data: any) => {
       try {
-        // SDK 数据结构是扁平的，不是 data.event.xxx
+        // SDK 的 EventDispatcher.parse() 会自动扁平化事件数据
+        // v2 事件（有 schema）: {header, event} → {event_type, ...header, ...event}
+        // 所以 message/sender 直接在 data 顶层
+
+        // 调试日志：打印接收到的原始数据键
+        console.log('[飞书] 事件数据 keys:', Object.keys(data));
+        console.log('[飞书] event_type:', data.event_type);
+
         const message = data.message;
         const sender = data.sender;
 
         if (!message) {
-          console.log('[飞书] 收到空消息事件，跳过:', JSON.stringify(data).slice(0, 200));
+          console.log('[飞书] 收到空消息事件，跳过');
+          console.log('[飞书] 原始数据:', JSON.stringify(data).slice(0, 500));
           return;
         }
 
