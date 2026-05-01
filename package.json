@@ -28,6 +28,7 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.62.1",
     "dotenv": "^16.4.7",
+    "ngrok": "^5.0.0-beta.2",
     "openai": "^4.77.0"
   },
   "devDependencies": {
