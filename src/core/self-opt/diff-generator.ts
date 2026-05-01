@@ -143,7 +143,9 @@ async function generateFixWithLLM(
 3. 修复后必须能通过 npm run build
 4. 输出格式为 JSON 数组，每个元素包含 path, action, content, description
 5. 如果是新文件，action 为 "create"；修改已有文件为 "modify"
-6. 返回纯 JSON，不要包裹在 markdown 代码块中`;
+6. 返回纯 JSON，不要包裹在 markdown 代码块中
+7. 测试文件 import 路径规则：测试在 tests/ 目录，源码在 src/ 目录，所以 import 路径必须是 "../src/..."（例如 import x from "../src/core/planner.js"），绝对禁止使用 "../core/" 这种错误路径
+8. 测试文件使用 "assert" 模块，禁止使用 "vitest"`;
 
   const userPrompt = `## 优化提案
 - 目标: ${proposal.target}
