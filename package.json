@@ -1,48 +1,48 @@
-{
-  "name": "mini-agent",
-  "version": "0.1.0",
-  "description": "A minimal LLM agent with tool calling support — ReAct loop in TypeScript",
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "start": "tsx src/cli.ts",
-    "test": "tsx tests/test.ts",
-    "build": "tsc",
-    "lint": "tsc --noEmit",
-    "pkg:win": "pkg . -t node20-win-x64 -o dist/mini-agent-win.exe",
-    "pkg:mac": "pkg . -t node20-macos-x64,node20-macos-arm64 -o dist/mini-agent-macos",
-    "pkg:linux": "pkg . -t node20-linux-x64,node20-linux-arm64 -o dist/mini-agent-linux",
-    "pkg:all": "npm run pkg:win && npm run pkg:mac && npm run pkg:linux"
-  },
-  "bin": "dist/src/cli.js",
-  "keywords": [
-    "llm",
-    "agent",
-    "react",
-    "tool-calling",
-    "typescript"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "dotenv": "^16.4.7",
-    "openai": "^4.77.0"
-  },
-  "devDependencies": {
-    "@yao-pkg/pkg": "^6.19.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "pkg": {
-    "scripts": [
-      "dist/**/*.js"
-    ],
-    "assets": [
-      ".env.example"
-    ],
-    "outputPath": "dist"
-  }
+﻿{
+    "name":  "mini-agent",
+    "version":  "4.4.0",
+    "description":  "A minimal LLM agent with two-phase planning, skill system, and self-optimization",
+    "type":  "module",
+    "main":  "dist/index.js",
+    "scripts":  {
+                    "start":  "tsx src/cli.ts",
+                    "test":  "tsx tests/test.ts",
+                    "build":  "tsc",
+                    "lint":  "tsc --noEmit",
+                    "pkg:win":  "pkg . -t node20-win-x64 -o dist/mini-agent-win.exe",
+                    "pkg:mac":  "pkg . -t node20-macos-x64,node20-macos-arm64 -o dist/mini-agent-macos",
+                    "pkg:linux":  "pkg . -t node20-linux-x64,node20-linux-arm64 -o dist/mini-agent-linux",
+                    "pkg:all":  "npm run pkg:win \u0026\u0026 npm run pkg:mac \u0026\u0026 npm run pkg:linux"
+                },
+    "bin":  "dist/src/cli.js",
+    "keywords":  [
+                     "llm",
+                     "agent",
+                     "react",
+                     "tool-calling",
+                     "typescript"
+                 ],
+    "author":  "",
+    "license":  "MIT",
+    "dependencies":  {
+                         "dotenv":  "^16.4.7",
+                         "openai":  "^4.77.0"
+                     },
+    "devDependencies":  {
+                            "@yao-pkg/pkg":  "^6.19.0",
+                            "tsx":  "^4.19.2",
+                            "typescript":  "^5.7.0"
+                        },
+    "engines":  {
+                    "node":  "\u003e=18.0.0"
+                },
+    "pkg":  {
+                "scripts":  [
+                                "dist/**/*.js"
+                            ],
+                "assets":  [
+                               ".env.example"
+                           ],
+                "outputPath":  "dist"
+            }
 }
