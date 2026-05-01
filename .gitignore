@@ -23,5 +23,15 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Temp/debug files
+*.txt
+!LICENSE.txt
+!ThirdPartyNoticeText.txt
+*.mjs
+*.tmp
+
+# Optimization logs (auto-generated)
+OPTIMIZATION_LOG.md
+
 # Coverage
 coverage/
