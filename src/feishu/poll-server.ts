@@ -40,14 +40,18 @@ export async function startFeishuPollServer(
   }).register({
     'im.message.receive_v1': async (data: any) => {
       try {
-        const message = data.event.message;
-        const sender = data.event.sender;
-        const chatId = data.event.chat_id;
+        // SDK 数据结构是扁平的，不是 data.event.xxx
+        const message = data.message;
+        const sender = data.sender;
+
+        if (!message) {
+          console.log('[飞书] 收到空消息事件，跳过:', JSON.stringify(data).slice(0, 200));
+          return;
+        }
+
+        const chatId = message.chat_id || '';
         const senderId = sender?.sender_id?.open_id || '';
-
-        if (!message) return;
-
-        const msgType = message.msg_type;
+        const msgType = message.message_type;
 
         // 只处理文本消息
         if (msgType !== 'text') {
