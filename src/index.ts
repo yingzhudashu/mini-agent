@@ -23,7 +23,7 @@
  *     DefaultToolMonitor,
  *     DEFAULT_TOOLBOXES,
  *     filesystemTools,
- *     MODEL_PRESETS,
+ *     MODEL_PROFILES,
  *   } from "./src/index.js";
  *   ```
  *
@@ -41,7 +41,7 @@ export { DefaultToolRegistry } from "./core/registry.js";
 export { DefaultToolMonitor } from "./core/monitor.js";
 
 /** 配置管理：预设、默认值、合并 */
-export { getDefaultModelConfig, getDefaultAgentConfig, mergeAgentConfig, MODEL_PRESETS } from "./core/config.js";
+export { getDefaultModelConfig, getDefaultAgentConfig, mergeAgentConfig, MODEL_PROFILES, applyModelProfile } from "./core/config.js";
 
 /** Phase 1 规划器：生成结构化执行计划 */
 export { generatePlan } from "./core/planner.js";
@@ -60,3 +60,19 @@ export { webTools } from "./tools/web.js";
 
 // ── 安全模块 ──
 export { resolveSandboxPath, isPathAllowed, getDefaultWorkspace } from "./security/sandbox.js";
+
+// ── 技能系统 (v4) ──
+export { DefaultSkillRegistry } from "./core/skill-registry.js";
+export { discoverSkillPackages, parseSkillMd } from "./core/skill-loader.js";
+export { createClawHubClient, searchLocalSkills } from "./core/clawhub-client.js";
+export { OutputManager } from "./core/output-manager.js";
+export { LoopDetector, DefaultLoopDetector } from "./core/loop-detector.js";
+export { appendLog, truncate } from "./core/logger.js";
+
+// ── 自我优化工具 (v4.2) ──
+export { selfOptTools } from "./tools/self-opt.js";
+export { inspectSelf } from "./core/self-opt/inspector.js";
+export { researchExternal } from "./core/self-opt/researcher.js";
+export { generateProposals, formatProposals } from "./core/self-opt/proposal-engine.js";
+export { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
+export type * from "./core/self-opt/types.js";

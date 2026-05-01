@@ -1,7 +1,7 @@
 /**
  * @file agent.ts — Agent 核心运行逻辑
  * @description
- *   这是 Mini Agent v3 的大脑，实现了两阶段架构。
+ *   这是 Mini Agent v4 的大脑，实现了两阶段架构。
  *
  *   ┌───────────────────────────────────────────────────┐
  *   │  Phase 1: Planning（规划阶段）                      │
@@ -23,11 +23,15 @@
  *   │  过程: ReAct 循环（思考 → 工具调用 → 执行 → 反馈）     │
  *   │  输出: 最终回复                                      │
  *   │                                                   │
- *   │  工具筛选策略：                                      │
- *   │  - "all"     → 发送全部工具                          │
- *   │  - "toolbox" → 只发送 plan.requiredToolboxes 的工具   │
- *   │  - "auto"    → 预留，未来可用语义匹配                 │
+ *   │  v4.1 新增机制：                                    │
+ *   │  - 循环检测（LoopDetector）：防止无限循环             │
+ *   │  - 上下文压缩：消息过长时自动摘要历史                  │
  *   └───────────────────────────────────────────────────┘
+ *
+ *   工具筛选策略：
+ *   - "all"     → 发送全部工具
+ *   - "toolbox" → 只发送 plan.requiredToolboxes 的工具
+ *   - "auto"    → 预留，未来可用语义匹配
  *
  *   配置合并优先级（从低到高）：
  *   1. getDefaultAgentConfig() — 默认值
@@ -58,6 +62,9 @@ import type {
 import { DefaultToolMonitor } from "./monitor.js";
 import { getDefaultWorkspace } from "../security/sandbox.js";
 import { getDefaultModelConfig, getDefaultAgentConfig, mergeAgentConfig } from "./config.js";
+import { appendLog, truncate } from "./logger.js";
+import { LoopDetector } from "./loop-detector.js";
+import { DEFAULT_LOOP_DETECTION } from "./config.js";
 
 // ============================================================================
 // OpenAI 客户端
@@ -77,7 +84,11 @@ export const client = new OpenAI({
   baseURL: process.env.OPENAI_BASE_URL,
 });
 
-/** 当前使用的模型名称，从环境变量读取，默认 gpt-4o-mini */
+/**
+ * 当前使用的模型名称
+ *
+ * 从环境变量 OPENAI_MODEL 读取，默认为 "gpt-4o-mini"。
+ */
 export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 // ============================================================================
@@ -91,14 +102,17 @@ export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
  *
  * ```
  * 1. 根据 plan.requiredToolboxes 筛选工具（toolSelectionStrategy 控制策略）
- * 2. 初始化消息列表：system prompt + 用户输入
- * 3. 进入 ReAct 循环：
- *    a. 发送消息 + 工具 schema 给 LLM
- *    b. LLM 回复：
+ * 2. 初始化循环检测器（v4.1 新增）
+ * 3. 初始化消息列表：system prompt + 用户输入
+ * 4. 进入 ReAct 循环：
+ *    a. 循环检测：检查是否陷入重复模式
+ *    b. 发送消息 + 工具 schema 给 LLM
+ *    c. LLM 回复：
  *       - 纯文本 → 最终回复，循环结束
  *       - 工具调用 → 执行工具，将结果追加到消息
- *    c. 循环直到：LLM 不再调用工具，或达到 maxTurns
- * 4. 返回最终回复
+ *    d. 上下文管理：消息过长时压缩历史
+ *    e. 循环直到：LLM 不再调用工具，或达到 maxTurns，或被循环检测拦截
+ * 5. 返回最终回复
  * ```
  *
  * 工具调用处理：
@@ -106,6 +120,10 @@ export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
  * - 按顺序执行每个工具（目前不支持真正的并行执行）
  * - 未知工具返回错误信息，不中断循环
  * - 工具执行异常被捕获为失败结果，不抛出
+ *
+ * v4.1 新增：
+ * - 循环检测：genericRepeat + knownPollNoProgress + pingPong
+ * - 上下文压缩：消息超过 12 条时自动摘要中间历史
  *
  * @param plan - 结构化执行计划（来自 Phase 1）
  * @param userInput - 用户原始需求
@@ -135,6 +153,10 @@ async function executePlan(
     permission: "allowlist",
   };
 
+  // 初始化循环检测器（v4.1 新增，参考 OpenClaw 的 loop-detection）
+  const loopConfig = agentConfig.loopDetection ?? DEFAULT_LOOP_DETECTION;
+  const loopDetector = new LoopDetector(loopConfig);
+
   // 初始化消息列表
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: `你是一个有用的助手。${plan.summary}` },
@@ -143,15 +165,16 @@ async function executePlan(
 
   const maxTurns = agentConfig.maxTurns;
   let turns = maxTurns;
+  let loopWarningShown = false;
 
-  // 调试日志：显示当前使用的工具数和计划信息
+  // 调试日志
   if (agentConfig.debug) {
     console.log(`\n🔧 使用 ${tools.length} 个工具 (策略: ${agentConfig.toolSelectionStrategy})`);
     console.log(`📊 计划: ${plan.summary}`);
-    console.log(`🔄 最大轮数: ${maxTurns}`);
+    console.log(`🔄 最大轮数: ${maxTurns} | 循环检测: ${loopConfig.enabled ? "启用" : "禁用"}`);
   }
 
-  // ReAct 循环
+  // ── ReAct 循环 ──
   // 每次循环 = 一次 LLM 调用 + 可能的工具调用
   while (turns-- > 0) {
     const startMs = Date.now();
@@ -171,6 +194,28 @@ async function executePlan(
 
     const msg = response.choices[0].message;
 
+    // 增量日志
+    if (agentConfig.logFile) {
+      appendLog(agentConfig.logFile, {
+        phase: "exec",
+        turn: maxTurns - turns,
+        req: {
+          model: MODEL,
+          messageCount: messages.length,
+          toolCount: tools.length,
+          lastMessage: messages[messages.length - 1]
+            ? { role: messages[messages.length - 1].role, content: truncate(messages[messages.length - 1].content ?? "[tool_calls]", 500) }
+            : null,
+        },
+        res: {
+          hasToolCalls: !!msg.tool_calls?.length,
+          toolCalls: msg.tool_calls?.map(tc => ({ name: tc.function.name, args: truncate(tc.function.arguments, 300) })) ?? null,
+          content: msg.content ? truncate(msg.content, 1000) : null,
+          usage: response.usage,
+        },
+      });
+    }
+
     // 没有工具调用 → LLM 给出了最终回复
     if (!msg.tool_calls?.length) {
       const reply = msg.content || "(空回复)";
@@ -181,7 +226,7 @@ async function executePlan(
     // 将 LLM 回复（包含 tool_calls）追加到消息历史
     messages.push(msg);
 
-    // 按顺序执行每个工具调用
+    // ── 按顺序执行每个工具调用 ──
     for (const tc of msg.tool_calls) {
       const tool = registry.get(tc.function.name);
       if (!tool) {
@@ -195,12 +240,46 @@ async function executePlan(
         continue;
       }
 
+      // ── 循环检测：在执行前检查是否陷入循环 ──
+      try {
+        const args = JSON.parse(tc.function.arguments);
+        const loopCheck = loopDetector.check(tc.function.name, args);
+
+        if (loopCheck.level === "critical") {
+          // 强制终止：避免无限循环
+          monitor.record(tc.function.name, Date.now() - startMs, false);
+          const errorMsg = `🛑 循环检测拦截: ${loopCheck.message}`;
+          if (agentConfig.outputManager) {
+            agentConfig.outputManager.write(errorMsg);
+          } else {
+            console.error(errorMsg);
+          }
+          return `⚠️ 任务执行被终止：${loopCheck.message}\n\n建议：简化请求或明确具体目标。`;
+        }
+
+        if (loopCheck.level === "warning" && !loopWarningShown) {
+          // 警告：通知用户但不拦截
+          loopWarningShown = true;
+          const warnMsg = loopCheck.message;
+          if (agentConfig.outputManager) {
+            agentConfig.outputManager.write(warnMsg);
+          } else {
+            console.warn(warnMsg);
+          }
+        }
+      } catch {
+        // 解析失败，跳过检测继续执行
+      }
+
       // 执行工具
       const toolStart = Date.now();
       let result;
       try {
         const args = JSON.parse(tc.function.arguments);
         result = await tool.handler(args, ctx);
+
+        // 记录到循环检测器
+        loopDetector.record(tc.function.name, args, result.content);
       } catch (err: any) {
         // 执行异常：不抛出，而是作为失败结果返回给 LLM
         result = { success: false, content: `❌ 执行异常: ${err?.message ?? err}` };
@@ -208,6 +287,19 @@ async function executePlan(
 
       // 记录性能数据
       monitor.record(tc.function.name, Date.now() - toolStart, result.success);
+
+      // ── 上下文管理：消息过长时压缩历史（v4.1 新增） ──
+      // 参考 OpenClaw 的 context overflow 策略
+      if (agentConfig.contextOverflowStrategy === "summarize" && messages.length > 12) {
+        const keepStart = 2; // system + first user
+        const keepEnd = 4;   // 最近 4 条
+        const compressed = messages.slice(keepStart, messages.length - keepEnd);
+        const summary = `[压缩了 ${compressed.length} 条历史消息，共 ${compressed.reduce((n, m) => n + ((m.content as string)?.length || 0), 0)} 字符]`;
+        messages.splice(keepStart, compressed.length, { role: "system", content: summary });
+        if (agentConfig.debug) {
+          console.log(`📦 上下文压缩：移除 ${compressed.length} 条历史消息`);
+        }
+      }
 
       // 将工具结果追加到消息历史
       messages.push({ role: "tool", tool_call_id: tc.id, content: result.content });
@@ -217,8 +309,9 @@ async function executePlan(
     }
   }
 
-  // 达到最大轮数 → 提示用户简化请求
-  return "⚠️ 达到最大调用次数，请简化请求";
+  // 达到最大轮数 → 提供有用的反馈
+  const loopStats = loopDetector.getStats();
+  return `⚠️ 达到最大调用次数（${maxTurns} 轮），任务未完成。\n\n建议：\n- 简化请求，分步骤执行\n- 明确具体目标\n- 检查是否存在重复操作模式\n\n📊 本轮统计：工具调用 ${loopStats.totalCalls} 次`;
 }
 
 // ============================================================================
@@ -237,7 +330,7 @@ async function executePlan(
  *
  * **Phase 2: Execution（执行阶段）**
  * - 根据计划的工具箱筛选工具
- * - 运行 ReAct 循环
+ * - 运行 ReAct 循环（含循环检测和上下文压缩）
  *
  * **跳过规划模式：**
  * - 设置 skipPlanning=true 或使用 `.plan <内容>` 命令
@@ -285,6 +378,10 @@ export async function runAgent(
     onPlan,
   } = options;
 
+  // ── 合并配置（确保所有默认值正确） ──
+  const baseConfig = getDefaultAgentConfig();
+  const agentConfig = mergeAgentConfig(baseConfig, options.agentConfig ?? {});
+
   let plan: StructuredPlan;
 
   // ── 直接执行模式 ──
@@ -305,18 +402,15 @@ export async function runAgent(
     };
   } else {
     // ── Phase 1: 规划阶段 ──
-    // Lazy import 避免循环依赖（planner.js → agent.js → planner.js）
+    // Lazy import 避免循环依赖
     const { generatePlan } = await import("./planner.js");
-    plan = await generatePlan(userInput, toolboxes);
+    const logFile = agentConfig.logFile;
+    plan = await generatePlan(userInput, toolboxes, logFile);
 
-    // 合并配置（用于调试日志和后续执行）
-    const baseConfig = getDefaultAgentConfig();
-    const agentConfig = mergeAgentConfig(baseConfig, {
-      ...options.agentConfig,
-      ...plan.suggestedConfig,
-    });
+    // 合并规划器的建议配置
+    Object.assign(agentConfig, mergeAgentConfig(agentConfig, plan.suggestedConfig));
 
-    // 调试日志：显示规划结果
+    // 调试日志
     if (agentConfig.debug) {
       console.log("\n📋 规划结果:");
       console.log(`  摘要: ${plan.summary}`);
@@ -330,19 +424,9 @@ export async function runAgent(
       const approved = await onPlan(plan);
       if (!approved) return "❌ 操作已取消";
     }
-
-    // ── Phase 2: 执行阶段 ──
-    return executePlan(plan, userInput, registry, monitor, agentConfig, onToolCall);
   }
 
-  // 直接执行模式：合并配置
-  const baseConfig = getDefaultAgentConfig();
-  const agentConfig = mergeAgentConfig(baseConfig, {
-    ...options.agentConfig,
-    ...plan.suggestedConfig,
-  });
-
-  // Phase 2: 执行
+  // ── Phase 2: 执行 ──
   return executePlan(plan, userInput, registry, monitor, agentConfig, onToolCall);
 }
 

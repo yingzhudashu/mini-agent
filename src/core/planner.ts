@@ -30,6 +30,7 @@
 
 import type { StructuredPlan, Toolbox } from "./types.js";
 import OpenAI from "openai";
+import { appendLog, truncate } from "./logger.js";
 
 /** 规划阶段使用的系统提示词 */
 const PLAN_SYSTEM_PROMPT = `你是一个任务规划专家。分析用户需求，生成结构化的执行计划。
@@ -122,6 +123,7 @@ const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 export async function generatePlan(
   userInput: string,
   toolboxes: Toolbox[],
+  logFile?: string | null,
 ): Promise<StructuredPlan> {
   // 将工具箱信息序列化为 JSON，供 LLM 理解每个工具箱的能力
   const toolboxesJson = JSON.stringify(toolboxes.map(t => ({
@@ -147,6 +149,16 @@ export async function generatePlan(
 
       const content = response.choices[0].message.content;
       if (!content) throw new Error("Empty response from planner");
+
+      // 增量日志：规划阶段 LLM 交互
+      if (logFile) {
+        appendLog(logFile, {
+          phase: "plan",
+          attempt: attempt + 1,
+          req: { model: MODEL, messages: messages.map(m => ({ role: m.role, content: truncate(m.content ?? "", 500) })) },
+          res: { content: truncate(content, 2000), usage: response.usage },
+        });
+      }
 
       // 处理 markdown code block 包裹的情况
       // LLM 有时会返回 ```json {...} ``` 格式
