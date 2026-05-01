@@ -355,3 +355,101 @@
 
 ---
 
+## 2026-05-01T11:20:05.691Z
+
+```json
+{
+  "result": {
+    "proposalId": "prop-1777634276011-0",
+    "status": "success",
+    "testResults": [
+      {
+        "testCaseId": "tc-test-0",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1424
+      },
+      {
+        "testCaseId": "tc-test-1",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1382
+      },
+      {
+        "testCaseId": "tc-test-2",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1661
+      },
+      {
+        "testCaseId": "tc-test-3",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1311
+      },
+      {
+        "testCaseId": "tc-test-4",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1523
+      },
+      {
+        "testCaseId": "tc-test-5",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1532
+      },
+      {
+        "testCaseId": "tc-test-6",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1310
+      },
+      {
+        "testCaseId": "tc-test-7",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1580
+      },
+      {
+        "testCaseId": "tc-test-8",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1304
+      },
+      {
+        "testCaseId": "tc-test-9",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1500
+      },
+      {
+        "testCaseId": "tc-test-10",
+        "passed": true,
+        "output": "\n> mini-agent@0.1.0 build\n> tsc\n\n",
+        "durationMs": 1275
+      }
+    ],
+    "testSummary": {
+      "total": 11,
+      "passed": 11,
+      "failed": 0
+    },
+    "fixAttempts": 1,
+    "reverted": false,
+    "lesson": "自动修复成功（1 次修复尝试）",
+    "timestamp": "2026-05-01T11:20:05.500Z",
+    "totalDurationSeconds": 128.294
+  },
+  "proposal": {
+    "id": "prop-1777634276011-0",
+    "type": "add",
+    "target": "添加缺失的测试文件",
+    "description": "为 core/planner.ts, core/types.ts, core/output-manager.ts, core/loop-detector.ts, core/skill-registry.ts, core/skill-loader.ts, core/clawhub-client.ts, cli.ts, index.ts, tools/skills.ts, security/sandbox.ts 添加单元测试",
+    "riskLevel": "low"
+  }
+}
+```
+
+---
+
