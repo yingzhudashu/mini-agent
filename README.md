@@ -1,6 +1,6 @@
-# Mini Agent v4.4 🦾
+# Mini Agent v4.5 🦾
 
-> 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展、循环检测与自我优化。
+> 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展、循环检测、自我优化与飞书集成。
 
 ## 架构总览
 
@@ -115,6 +115,45 @@ inspector → researcher → proposal-engine → auto-optimizer → self-test-ru
 - **自动修复**：测试失败时调用 LLM 生成修复补丁（最多 2 次尝试）
 - **回滚保护**：修复失败后自动回滚到快照前的状态
 
+## 飞书集成（v4.5+）
+
+Mini Agent 支持通过飞书进行对话，类似 OpenClaw 的飞书通道能力。
+
+### 前置准备
+
+1. 在 [飞书开放平台](https://open.feishu.cn/) 创建**企业自建应用**
+2. 获取 `App ID` 和 `App Secret`
+3. 配置事件订阅：
+   - 添加事件：`im.message.receive_v1`（接收消息）
+   - 配置请求地址：`https://your-domain:9800/webhook`
+4. 发布应用并获得相应权限
+
+### 配置与运行
+
+```env
+# .env 文件中添加
+FEISHU_APP_ID=cli_xxxxxxxxxx
+FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxxxx
+FEISHU_PORT=9800
+```
+
+```bash
+# 启动飞书 Webhook 服务器
+npm run feishu
+```
+
+启动后，Agent 会自动监听飞书消息并回复。
+
+### 架构
+
+```
+飞书用户 → 飞书开放平台 → Webhook (POST /webhook) → Mini Agent → 回复消息
+```
+
+- `src/feishu/server.ts` — Webhook HTTP 服务器，处理事件推送
+- `src/feishu/types.ts` — 飞书相关类型定义
+- `src/feishu-cli.ts` — 飞书模式入口
+
 ## 快速开始
 
 ### 环境要求
@@ -159,6 +198,9 @@ MODEL_PROFILE=balanced
 ```bash
 # 交互式 CLI
 npm start
+
+# 飞书 Webhook 服务器
+npm run feishu
 
 # 运行测试
 npm test
@@ -418,6 +460,7 @@ npm run pkg:all    # Win + macOS + Linux
 
 ## 版本历史
 
+- **v4.5**: 放宽调用限制 + 飞书集成 — maxTurns 20、环境变量覆盖、`npm run feishu` Webhook 服务器
 - **v4.4**: 自我优化 Phase 5 — 全自动优化（Git 快照 + 自动修复 + 回滚保护 + 11 个测试文件生成）
 - **v4.3**: 自我优化 Phase 4 — LLM 驱动的自动修复（diff-generator）+ .optimize auto/propose
 - **v4.2**: 自我优化 Phase 1-3 — inspector + researcher + proposal-engine + self-test-runner
