@@ -1,0 +1,24 @@
+﻿馃摝 宸插姞杞芥妧鑳藉寘: 榛樿鎶€鑳藉寘 (0 涓妧鑳?
+馃摝 宸插姞杞芥妧鑳藉寘: demo (1 涓妧鑳?
+馃摝 宸插姞杞芥妧鑳藉寘: self-optimization (1 涓妧鑳?
+馃 Mini Agent v4.4 宸插惎鍔?馃摗 妯″瀷: qwen3.6-plus | 棰勮: balanced
+馃搨 宸ヤ綔绌洪棿: D:\AIhub\mini-agent
+馃О 宸ュ叿绠? 鏂囦欢璇诲彇, 鏂囦欢鍐欏叆, 鐩綍鎿嶄綔, 鍛戒护鎵ц, 缃戠粶璁块棶, 鏍稿績鑳藉姏, 鎶€鑳界鐞? 鑷垜浼樺寲
+馃敡 宸ュ叿: read_file, write_file, edit_file, list_dir, create_dir, move_file, copy_file, delete_file, exec_command, fetch_url, get_time, search_skills, install_skill, list_skills, self_inspect, external_research, generate_proposal, implement_change, run_tests, git_snapshot, hello_demo
+馃幆 鎶€鑳? 婕旂ず鎶€鑳? 鑷垜浼樺寲
+馃挕 杈撳叆闂锛屾垨 "quit" 閫€鍑?| 鍛戒护: .stats .skills .profile .skill .plan .log .optimize
+鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+
+> [1G[2K
+馃殌 鍏ㄨ嚜鍔ㄤ紭鍖?..
+
+[1/5] 馃攳 鑷垜瀹¤...
+  鏋舵瀯: 7/16
+
+[2/5] 馃寪 澶栭儴璋冪爺...
+
+[3/5] 馃搵 鐢熸垚鎻愭...
+  [DEBUG] proposal: 娣诲姞缂哄け鐨勬祴璇曟枃浠?files: 0
+  鎬昏: 1, 鑷姩: 1, 璺宠繃: 0
+
+[4/1] 馃搶 娣诲姞缂哄け鐨勬祴璇曟枃浠?(0 鏂囦欢)
