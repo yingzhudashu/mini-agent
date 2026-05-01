@@ -94,7 +94,8 @@ export function generateFileChanges(proposal: OptimizationProposal, inspection: 
     for (const mod of untested.slice(0, 3)) {
       const fn = mod.path.split(/[\\/]/).pop()?.replace(/\.ts$/, "") || "module";
       const tp = "tests/" + fn + ".test.ts";
-      const tc = '/**\n * Auto-generated test for ' + fn + '\n */\n\nimport assert from "assert";\n\ndescribe("' + fn + '", () => {\n  it("should be importable", async () => {\n    const m = await import("../../src/' + mod.path.replace(/\\/g, "/") + '");\n    assert.ok(m);\n  });\n});\n';
+      const importPath = "../src/" + mod.path.replace(/\\/g, "/");
+      const tc = `/**\n * Auto-generated test for ${fn}\n */\n\nimport assert from "assert";\n\ndescribe("${fn}", () => {\n  it("should be importable", async () => {\n    const m = await import("${importPath}");\n    assert.ok(m);\n  });\n});\n`;
       changes.push({ path: tp, action: "create", content: tc });
     }
   }
