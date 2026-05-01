@@ -287,7 +287,8 @@ async function main() {
     // 内置命令：自我优化
     if (input === ".optimize" || input.startsWith(".optimize ")) {
       const subCmd = input.split(/\s+/)[1] || "";
-      const srcDir = path.resolve(__dirname, "src");
+      const projectRoot = path.resolve(__dirname, "..");
+      const srcDir = path.resolve(projectRoot, "src");
       try {
         outputManager.beginOutput();
         if (subCmd === "inspect") {
