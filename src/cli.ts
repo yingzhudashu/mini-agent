@@ -70,6 +70,8 @@ import { researchExternal } from "./core/self-opt/researcher.js";
 import { generateProposals, formatProposals } from "./core/self-opt/proposal-engine.js";
 import { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
 import { autoOptimize, formatAutoOptimizeResult } from "./core/self-opt/auto-optimizer.js";
+import { startFeishuPollServer } from "./feishu/poll-server.js";
+import type { FeishuConfig } from "./feishu/types.js";
 
 /** ESM 下手动获取 __dirname */
 const __filename = fileURLToPath(import.meta.url);
@@ -144,7 +146,7 @@ async function main() {
   const skillPrompts = skillRegistry.getSystemPrompts();
 
   // ── 显示欢迎信息 ──
-  console.log("🤖 Mini Agent v4.4 已启动");
+  console.log("🤖 Mini Agent v4.5 已启动");
   console.log(`📡 模型: ${MODEL} | 预设: ${activeProfile}`);
   console.log(`📂 工作空间: ${getDefaultWorkspace()}`);
   console.log(`🧰 工具箱: ${allToolboxes.map(t => t.name).join(", ")}`);
@@ -157,6 +159,47 @@ async function main() {
     '💡 输入问题，或 "quit" 退出 | 命令: .stats .skills .profile .skill .plan .log .optimize',
   );
   console.log("─".repeat(60));
+
+  // ── 自动启动飞书长轮询（如果配置了飞书凭证） ──
+  const feishuAppId = process.env.FEISHU_APP_ID;
+  const feishuAppSecret = process.env.FEISHU_APP_SECRET;
+  if (feishuAppId && feishuAppSecret) {
+    console.log("\n📱 检测到飞书配置，正在启动 WebSocket 长轮询...");
+    try {
+      const feishuConfig: FeishuConfig = {
+        appId: feishuAppId,
+        appSecret: feishuAppSecret,
+        port: 0,
+      };
+
+      async function handleFeishuMessage(
+        content: string,
+        _chatId: string,
+        _senderId: string
+      ): Promise<string> {
+        try {
+          console.log(`[飞书] 处理: ${content.slice(0, 50)}...`);
+          return await runAgent(content, {
+            registry,
+            monitor,
+            toolboxes: allToolboxes,
+            agentConfig: { debug: true },
+            systemPrompt: skillPrompts.length > 0 ? skillPrompts.join("\n\n") : undefined,
+          });
+        } catch (err: any) {
+          console.error(`[飞书] 处理失败:`, err);
+          return "抱歉，处理您的消息时出现了错误。";
+        }
+      }
+
+      // 后台启动飞书，不阻塞 readline
+      startFeishuPollServer(feishuConfig, handleFeishuMessage).catch((err) => {
+        console.error("❌ 飞书长轮询启动失败:", err);
+      });
+    } catch (err: any) {
+      console.error("❌ 飞书初始化失败:", err);
+    }
+  }
 
   // ── 状态变量 ──
   let logFile: string | null = null;
