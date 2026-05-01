@@ -1,14 +1,21 @@
 /**
- * @file diff-generator.ts — Diff Generator 差异生成器
+ * @file diff-generator.ts — Diff Generator 差异生成器 (Phase 4)
  * @description
  *   基于测试失败结果和当前代码，生成代码修复补丁。
  *   Phase 4 核心组件：连接 test runner 和 LLM 的桥梁。
  *
  *   工作流程：
- *   1. 分析测试失败输出，定位问题
- *   2. 读取相关源文件
- *   3. 调用 LLM 生成修复补丁
- *   4. 返回可应用的 FileChange[]
+ *   1. 分析测试失败输出，定位问题类型（编译错误/运行时错误/断言失败）
+ *   2. 提取可能涉及的文件路径（从测试用例和提案中）
+ *   3. 读取相关源文件内容（最多 5 个，每个前 3000 字符）
+ *   4. 调用 LLM 生成修复补丁（FileChange[]）
+ *   5. 解析 LLM 返回的 JSON，过滤无效变更
+ *
+ *   设计原则：
+ *   - LLM 驱动：利用大模型的代码理解能力生成修复方案
+ *   - 最小化变更：只修改必要的部分，避免过度修改
+ *   - 安全限制：最多 2 次修复尝试（在 self-test-runner 中控制）
+ *   - 路径规则：测试文件 import 必须使用 "../src/..."，禁止 "../core/..."
  *
  * @module core/self-opt/diff-generator
  */
@@ -33,6 +40,18 @@ interface FailureAnalysis {
 
 /**
  * 分析测试失败，提取关键信息
+ *
+ * 根据测试失败的输出内容，识别失败类型并提供修复建议：
+ * - TypeScript 编译错误 → 类型不匹配、语法错误
+ * - ReferenceError → 缺少 import 或变量名错误
+ * - TypeError → 函数签名或参数类型问题
+ * - 断言失败 → 预期值与实际值不匹配
+ * - 超时 → 性能问题或无限循环
+ * - 文件不存在 → 需要创建缺失的文件
+ *
+ * @param results 测试执行结果列表
+ * @param proposal 当前优化提案
+ * @returns 失败分析结果
  */
 function analyzeFailures(
   results: TestExecutionResult[],
@@ -104,6 +123,24 @@ function analyzeFailures(
 
 /**
  * 调用 LLM 生成修复补丁
+ *
+ * 工作流程：
+ * 1. 读取相关文件内容（最多 5 个文件，每个前 3000 字符）
+ * 2. 构建 LLM prompt（包含系统提示 + 用户提示）
+ * 3. 调用 LLM 生成 JSON 格式的修复补丁
+ * 4. 解析并验证返回结果
+ *
+ * 系统提示包含关键规则：
+ * - 最小化变更
+ * - 保持原有功能
+ * - 必须通过 npm run build
+ * - 测试文件 import 路径必须是 "../src/..."
+ * - 使用 assert 模块，禁止 vitest
+ *
+ * @param proposal 当前优化提案
+ * @param failureAnalysis 失败分析结果
+ * @param srcDir 源码目录
+ * @returns 生成的文件变更列表
  */
 async function generateFixWithLLM(
   proposal: OptimizationProposal,
@@ -211,10 +248,27 @@ export interface DiffGenerateResult {
 /**
  * 生成修复补丁
  *
+ * 这是 diff-generator 的主入口，被 self-test-runner 在自动修复循环中调用。
+ *
+ * 工作流程：
+ * 1. 调用 analyzeFailures 分析失败原因
+ * 2. 如果没有可疑文件和提案文件变更，直接返回失败
+ * 3. 调用 generateFixWithLLM 生成修复补丁
+ * 4. 返回修复结果
+ *
  * @param proposal 当前提案
  * @param testResults 失败的测试结果
  * @param srcDir 源码目录
- * @returns 修复补丁
+ * @returns 修复补丁和摘要
+ *
+ * @example
+ * ```ts
+ * const result = await generateFixDiff(proposal, testResults, srcDir);
+ * if (result.success) {
+ *   console.log(`生成了 ${result.changes.length} 个文件变更`);
+ *   await applyChanges(result.changes);
+ * }
+ * ```
  */
 export async function generateFixDiff(
   proposal: OptimizationProposal,

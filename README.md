@@ -1,4 +1,4 @@
-# Mini Agent v4.3 🦾
+# Mini Agent v4.4 🦾
 
 > 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展、循环检测与自我优化。
 
@@ -65,12 +65,55 @@ Mini Agent 采用 **两阶段架构（Plan-then-Execute）** + **技能系统（
 
 ## 自我优化系统（v4.2+）
 
-- .optimize inspect — 自我审视（代码质量 + 架构完整性）
-- .optimize research — 外部调研（arXiv + GitHub 最新论文/项目）
-- .optimize propose — 生成优化提案（按风险等级排序）
-- .optimize auto — 全自动优化（低风险提案自动执行 + LLM 修复）
+Mini Agent 具备**自我优化**能力，通过 `.optimize` 指令触发，可自动分析代码质量、搜索最佳实践、生成优化提案并执行。
 
-组件链：inspector → researcher → proposal-engine → diff-generator → self-test-runner
+### 指令参考
+
+| 指令 | 说明 |
+|------|------|
+| `.optimize` | 显示自我优化帮助信息 |
+| `.optimize inspect` | 自我审视（代码质量 + 架构完整性 + 痛点分析） |
+| `.optimize research` | 外部调研（arXiv + GitHub 最新论文/项目） |
+| `.optimize propose` | 生成优化提案（按风险等级排序，展示但不执行） |
+| `.optimize auto` | **全自动优化**（低风险提案自动执行 + Git 快照 + 自动修复 + 回滚保护） |
+
+### 组件链
+
+```
+inspector → researcher → proposal-engine → auto-optimizer → self-test-runner → diff-generator → git-snapshot
+```
+
+### Phase 5 全自动优化流程（`.optimize auto`）
+
+```
+[1/5] 自我审视 → Inspector 分析代码质量
+         ↓
+[2/5] 外部调研 → Researcher 搜索最佳实践 (arXiv + GitHub)
+         ↓
+[3/5] 生成提案 → ProposalEngine 基于痛点匹配生成优化方案
+         ↓
+[4/N] 执行提案 → 创建 Git 快照 → 应用文件变更 → 运行测试
+         ↓                    ↓                    ↓
+        成功 → finalize    失败 → 自动修复     修复失败 → 回滚
+         ↓
+[5/5] 输出报告 → 格式化结果 + 写入 OPTIMIZATION_LOG.md
+```
+
+### 风险等级与执行策略
+
+| 风险等级 | 执行策略 | 示例 |
+|----------|----------|------|
+| 🟢 low | 自动执行 | 添加测试文件、消除 any 类型 |
+| 🟡 medium | 跳过（需用户确认） | 简化高复杂度模块、完善架构组件 |
+| 🔴 high | 跳过（必须手动审核） | 修改核心模块 |
+| ⛔ destructive | 跳过（禁止自动执行） | 删除文件 |
+
+### 安全机制
+
+- **Git 快照**：每次变更前创建快照，成功则保留，失败则回滚
+- **测试验证**：每次变更后运行测试，确保不破坏现有功能
+- **自动修复**：测试失败时调用 LLM 生成修复补丁（最多 2 次尝试）
+- **回滚保护**：修复失败后自动回滚到快照前的状态
 
 ## 快速开始
 
@@ -137,6 +180,7 @@ npm run build
 | `.skill install <s>` | 安装技能 |
 | `.skill list` | 列出已安装技能 |
 | `.log <路径>` | 开启增量日志到指定文件 |
+| `.optimize` | 自我优化（inspect/research/propose/auto） |
 | `quit` / `exit` | 退出 |
 
 ## 核心架构
@@ -261,7 +305,7 @@ metadata: {"openclaw": {"requires": {"bins": ["git"], "env": ["API_KEY"]}}}
 mini-agent/
 ├── src/
 │   ├── core/
-│   │   ├── types.ts           # 类型定义（含 ClawHub/LoopDetection）
+│   │   ├── types.ts           # 类型定义（含 ClawHub/LoopDetection/SelfOpt）
 │   │   ├── config.ts          # 配置管理（预设、循环检测默认值）
 │   │   ├── planner.ts         # Phase 1: 规划器
 │   │   ├── agent.ts           # Phase 2: ReAct + 循环检测 + 上下文
@@ -273,6 +317,15 @@ mini-agent/
 │   │   ├── clawhub-client.ts  # ClawHub 客户端（v4.1 新增）
 │   │   ├── skill-registry.ts  # 技能注册表（含 gating）
 │   │   └── skill-loader.ts    # 技能包自动发现与加载
+│   │   └── self-opt/          # 自我优化子系统（v4.2+）
+│   │       ├── types.ts           # 自我优化类型定义
+│   │       ├── inspector.ts       # 自我审视引擎
+│   │       ├── researcher.ts      # 外部调研引擎
+│   │       ├── proposal-engine.ts # 优化提案引擎
+│   │       ├── auto-optimizer.ts  # 全自动优化编排器（Phase 5）
+│   │       ├── diff-generator.ts  # LLM 驱动的修复补丁生成器
+│   │       ├── self-test-runner.ts# 自动测试执行器
+│   │       └── git-snapshot.ts    # Git 快照管理器（Phase 5）
 │   ├── tools/
 │   │   ├── filesystem.ts      # 8 个文件操作工具
 │   │   ├── exec.ts            # 命令执行工具
@@ -365,6 +418,7 @@ npm run pkg:all    # Win + macOS + Linux
 
 ## 版本历史
 
+- **v4.4**: 自我优化 Phase 5 — 全自动优化（Git 快照 + 自动修复 + 回滚保护 + 11 个测试文件生成）
 - **v4.3**: 自我优化 Phase 4 — LLM 驱动的自动修复（diff-generator）+ .optimize auto/propose
 - **v4.2**: 自我优化 Phase 1-3 — inspector + researcher + proposal-engine + self-test-runner
 
