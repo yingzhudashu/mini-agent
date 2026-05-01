@@ -20,7 +20,7 @@ const TEMPLATES: Template[] = [
   {
     matchPainPoints: ["没有对应测试", "测试覆盖", "hasTests: false"],
     type: "add", riskLevel: "low", title: "添加缺失的测试文件",
-    description: (r) => `为 ${r.moduleAnalysis.filter(m => !m.hasTests && m.linesOfCode > 50).map(m => m.path).join(", ")} 添加单元测试`,
+    description: (r) => { const m = r.moduleAnalysis.filter(m => !m.hasTests && m.linesOfCode > 50); return `为 ${m.map(m => m.path).join(", ")} 添加单元测试`; },
     rationale: () => "测试驱动开发是最佳实践", benefit: "提升测试覆盖率",
     generateTestCases: (r) => r.moduleAnalysis.filter(m => !m.hasTests && m.linesOfCode > 50).map((m, i) => ({
       id: `tc-test-${i}`, type: "unit" as const, description: `验证 ${m.path}`, setup: "", action: "调用模块", expected: "正常执行", command: "npm run build",
@@ -91,7 +91,7 @@ export function generateFileChanges(proposal: OptimizationProposal, inspection: 
   const changes: FileChange[] = [];
   if (proposal.target.includes("测试")) {
     const untested = inspection.moduleAnalysis.filter(m => !m.hasTests && m.linesOfCode > 50);
-    for (const mod of untested.slice(0, 2)) {
+    for (const mod of untested.slice(0, 3)) {
       const fn = mod.path.split(/[\\/]/).pop()?.replace(/\.ts$/, "") || "module";
       const tp = "tests/" + fn + ".test.ts";
       const tc = '/**\n * Auto-generated test for ' + fn + '\n */\n\nimport assert from "assert";\n\ndescribe("' + fn + '", () => {\n  it("should be importable", async () => {\n    const m = await import("../../src/' + mod.path.replace(/\\/g, "/") + '");\n    assert.ok(m);\n  });\n});\n';
@@ -116,6 +116,7 @@ export function formatProposals(proposals: OptimizationProposal[]): string {
     lines.push(`    类型: ${p.type} | 风险: ${p.riskLevel}`);
     lines.push(`    ${p.description}`);
     lines.push(`    收益: ${p.expectedBenefit}`);
+    if (p.files.length > 0) lines.push(`    文件: ${p.files.map(f => f.path).join(", ")}`);
     lines.push("");
   }
   return lines.join("\n");

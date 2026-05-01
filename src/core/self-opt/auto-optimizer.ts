@@ -58,10 +58,12 @@ async function execProposal(p: OptimizationProposal, cwd: string, srcDir: string
     snap = await createSnapshot(cwd, `pre-${p.target}`);
     if (snap) console.log(`  📸 ${snap.slice(0, 8)}`);
   }
+  // 确保有文件变更
   if (p.files.length === 0) {
     const { inspectSelf } = await import("./inspector.js");
     const insp = await inspectSelf(srcDir);
     generateFileChanges(p, insp);
+    // 如果还是没有，用 diff-generator 生成
     if (p.files.length === 0) {
       const fake = p.testCases.map(tc => ({ testCaseId: tc.id, passed: false, output: "待生成", durationMs: 0 }));
       const diff = await generateFixDiff(p, fake, srcDir);
@@ -87,24 +89,31 @@ export async function autoOptimize(srcDir: string, projectRoot: string): Promise
   const { inspectSelf } = await import("./inspector.js");
   const insp = await inspectSelf(srcDir);
   console.log(`  架构: ${insp.architectureChecks.filter(c => c.passed).length}/${insp.architectureChecks.length}`);
+  console.log(`  未测试模块: ${insp.moduleAnalysis.filter(m => !m.hasTests && m.linesOfCode > 50).length} 个`);
+
   console.log("\n[2/5] 🌐 外部调研...");
   const { researchExternal } = await import("./researcher.js");
   const res = await researchExternal();
+  console.log(`  资源: ${res.references.length} 个`);
+
   console.log("\n[3/5] 📋 生成提案...");
   const proposals = generateProposals(insp, res);
-  for (const p of proposals) { generateFileChanges(p, insp); console.log("  [DEBUG] proposal:", p.target, "files:", p.files.length); }
+  for (const p of proposals) generateFileChanges(p, insp);
   const auto = proposals.filter(p => AUTO_RISK.includes(p.riskLevel as "low"));
   const skipped = proposals.filter(p => !AUTO_RISK.includes(p.riskLevel as "low"));
   console.log(`  总计: ${proposals.length}, 自动: ${auto.length}, 跳过: ${skipped.length}`);
+
   const useGit = await isInGitRepo(projectRoot);
   const executed: ExecResult[] = [];
   for (let i = 0; i < auto.length; i++) {
-    console.log(`\n[4/${auto.length}] 📌 ${auto[i].target} (${auto[i].files.length} 文件)`);
+    console.log(`\n[4/${auto.length}] 📌 执行: ${auto[i].target} (${auto[i].files.length} 文件变更)`);
     const r = await execProposal(auto[i], projectRoot, srcDir, useGit);
     executed.push(r);
     appendOptimizationLog(projectRoot, { result: r.result, proposal: { id: r.proposal.id, type: r.proposal.type, target: r.proposal.target, description: r.proposal.description, riskLevel: r.proposal.riskLevel } });
     console.log(`  ${r.result.status === "success" ? "✅" : "❌"} ${r.result.lesson}`);
+    if (r.gitSnapshot) console.log(`  📸 快照: ${r.gitSnapshot.slice(0, 8)}`);
   }
+
   const ok = executed.filter(e => e.result.status === "success").length;
   const fail = executed.filter(e => e.result.status === "failed").length;
   const rv = executed.filter(e => e.result.reverted).length;
