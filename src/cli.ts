@@ -1,7 +1,7 @@
 /**
  * @file cli.ts — CLI 交互入口
  * @description
- *   Mini Agent v4.3 的用户界面层，负责初始化所有子系统并启动交互循环。
+ *   Mini Agent v4.4 的用户界面层，负责初始化所有子系统并启动交互循环。
  *
  *   职责：
  *   1. 加载 .env 环境变量
@@ -30,7 +30,7 @@
  *   → quit → 打印最终报告 → 退出
  *   ```
  *
- *   内置命令（v4.2 更新）：
+ *   内置命令（v4.4 更新）：
  *   - `.stats` — 查看工具使用统计
  *   - `.skills` — 查看已加载技能
  *   - `.profile <name>` — 切换模型预设
@@ -69,6 +69,7 @@ import { inspectSelf } from "./core/self-opt/inspector.js";
 import { researchExternal } from "./core/self-opt/researcher.js";
 import { generateProposals, formatProposals } from "./core/self-opt/proposal-engine.js";
 import { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
+import { autoOptimize, formatAutoOptimizeResult } from "./core/self-opt/auto-optimizer.js";
 
 /** ESM 下手动获取 __dirname */
 const __filename = fileURLToPath(import.meta.url);
@@ -143,7 +144,7 @@ async function main() {
   const skillPrompts = skillRegistry.getSystemPrompts();
 
   // ── 显示欢迎信息 ──
-  console.log("🤖 Mini Agent v4.3 已启动");
+  console.log("🤖 Mini Agent v4.4 已启动");
   console.log(`📡 模型: ${MODEL} | 预设: ${activeProfile}`);
   console.log(`📂 工作空间: ${getDefaultWorkspace()}`);
   console.log(`🧰 工具箱: ${allToolboxes.map(t => t.name).join(", ")}`);
@@ -328,29 +329,14 @@ async function main() {
           outputManager.write(lines.join("\n"));
         } else if (subCmd === "auto") {
           outputManager.write("\n🚀 全自动优化...");
-          outputManager.write("\n[1/3] 🔍 自我审视...");
+          const projectRoot = path.resolve(__dirname, "..");
+          const result = await autoOptimize(srcDir, projectRoot);
+          outputManager.write(formatAutoOptimizeResult(result));
+        } else if (subCmd === "propose") {
+          outputManager.write("\n📋 生成优化提案...");
           const inspectReport = await inspectSelf(srcDir);
-          outputManager.write(`  ✅ 架构: ${inspectReport.architectureChecks.filter((c) => c.passed).length}/${inspectReport.architectureChecks.length}`);
-          outputManager.write("\n[2/3] 🌐 外部调研...");
           const researchReport = await researchExternal();
-          outputManager.write(`  ✅ 找到 ${researchReport.references.length} 个资源`);
-          outputManager.write("\n[3/3] 📋 生成并执行提案...");
           const proposals = generateProposals(inspectReport, researchReport);
-          const lowRisk = proposals.filter((p) => p.riskLevel === "low");
-          outputManager.write(`  🟢 低风险: ${lowRisk.length} 个（自动执行）`);
-          const otherRisk = proposals.filter((p) => p.riskLevel !== "low");
-          if (otherRisk.length > 0) outputManager.write(`  ⚠️ 中高风险: ${otherRisk.length} 个（需手动处理）`);
-          if (lowRisk.length === 0) {
-            outputManager.write("\n💡 没有低风险提案，无需自动执行");
-          } else {
-            outputManager.write("\n  ⚠️ 自动执行功能待完整实现（需要 LLM 生成代码变更）");
-            for (const p of lowRisk) {
-              outputManager.write(`  📌 ${p.target}: ${p.description}`);
-            }
-          }
-          outputManager.write("\n" + "═".repeat(55));
-          outputManager.write("📋 优化完成");
-          outputManager.write("═".repeat(55));
           outputManager.write(formatProposals(proposals));
         } else if (subCmd === "propose") {
           outputManager.write("\n📋 生成优化提案...");

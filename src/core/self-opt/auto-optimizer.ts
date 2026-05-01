@@ -92,7 +92,7 @@ export async function autoOptimize(srcDir: string, projectRoot: string): Promise
   const res = await researchExternal();
   console.log("\n[3/5] 📋 生成提案...");
   const proposals = generateProposals(insp, res);
-  for (const p of proposals) generateFileChanges(p, insp);
+  for (const p of proposals) { generateFileChanges(p, insp); console.log("  [DEBUG] proposal:", p.target, "files:", p.files.length); }
   const auto = proposals.filter(p => AUTO_RISK.includes(p.riskLevel as "low"));
   const skipped = proposals.filter(p => !AUTO_RISK.includes(p.riskLevel as "low"));
   console.log(`  总计: ${proposals.length}, 自动: ${auto.length}, 跳过: ${skipped.length}`);
