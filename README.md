@@ -1,6 +1,6 @@
-# Mini Agent v4.1 🦾
+# Mini Agent v4.3 🦾
 
-> 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展与循环检测。
+> 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展、循环检测与自我优化。
 
 ## 架构总览
 
@@ -62,6 +62,15 @@ Mini Agent 采用 **两阶段架构（Plan-then-Execute）** + **技能系统（
 │  • Gating 元数据 → 按 bin/env/config 过滤             │
 └─────────────────────────────────────────────────────┘
 ```
+
+## 自我优化系统（v4.2+）
+
+- .optimize inspect — 自我审视（代码质量 + 架构完整性）
+- .optimize research — 外部调研（arXiv + GitHub 最新论文/项目）
+- .optimize propose — 生成优化提案（按风险等级排序）
+- .optimize auto — 全自动优化（低风险提案自动执行 + LLM 修复）
+
+组件链：inspector → researcher → proposal-engine → diff-generator → self-test-runner
 
 ## 快速开始
 
@@ -355,6 +364,10 @@ npm run pkg:all    # Win + macOS + Linux
 ```
 
 ## 版本历史
+
+- **v4.3**: 自我优化 Phase 4 — LLM 驱动的自动修复（diff-generator）+ .optimize auto/propose
+- **v4.2**: 自我优化 Phase 1-3 — inspector + researcher + proposal-engine + self-test-runner
+
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
