@@ -1,35 +1,9 @@
-/**
+﻿/**
  * @file config.ts — 模型与 Agent 配置管理
  * @description
  *   提供双层配置体系，将「模型层」和「Agent 层」的配置分离。
  *
- *   ┌─────────────────────────────────────────┐
- *   │  ModelConfig（模型层）                    │
- *   │  - API 端点、模型名称                     │
- *   │  - temperature / top_p / max_tokens      │
- *   │  - thinking_level / thinking_budget       │
- *   │  - context_window（上下文窗口）            │
- *   │  - profiles（模型预设，v4.1 新增）         │
- *   │  └─ 来源：.env / 模型厂商推荐              │
- *   └──────────────┬──────────────────────────┘
- *                  │
- *   ┌──────────────▼──────────────────────────┐
- *   │  AgentConfig（Agent 层）                  │
- *   │  - max_turns（最大对话轮数）              │
- *   │  - tool_timeout（工具超时）               │
- *   │  - context_reserve_ratio（预留比例）       │
- *   │  - overflow_strategy（溢出策略）           │
- *   │  - tool_selection_strategy（工具筛选策略）  │
- *   │  - loop_detection（循环检测，v4.1 新增）   │
- *   │  └─ 可被规划器的 suggestedConfig 覆盖      │
- *   └─────────────────────────────────────────┘
- *
- *   模型预设（Model Profiles，v4.1 新增）：
- *   - creative: 高创造性任务（写作、头脑风暴）
- *   - balanced: 平衡模式（默认，日常任务）
- *   - precise: 精确模式（数据分析、代码审查）
- *   - code: 编程模式（代码生成、调试）
- *   - fast: 快速模式（简单问答）
+ *   v4.5 更新：支持环境变量覆盖关键参数，方便在不同部署环境下调整行为。
  *
  * @module core/config
  */
@@ -38,16 +12,6 @@ import type { ModelConfig, ModelProfile, AgentConfig, LoopDetectionConfig } from
 
 /**
  * 模型配置预设
- *
- * 参考 OpenClaw 的 model profiles 设计，针对不同任务类型提供预调优的参数组合。
- *
- * | 预设 | temperature | thinking | maxTokens | 适用场景 |
- * |------|-------------|----------|-----------|---------|
- * | creative | 0.9 | disabled | 8192 | 写作、头脑风暴 |
- * | balanced | 0.7 | light | 4096 | 日常任务（默认） |
- * | precise | 0.3 | medium | 4096 | 数据分析、代码审查 |
- * | code | 0.2 | light | 8192 | 代码生成、调试 |
- * | fast | 0.3 | disabled | 2048 | 简单问答 |
  */
 export const MODEL_PROFILES: Record<string, ModelProfile> = {
   creative: {
@@ -98,16 +62,43 @@ export const MODEL_PROFILES: Record<string, ModelProfile> = {
 };
 
 /**
+ * 从环境变量读取整数值
+ */
+function envInt(key: string, fallback: number): number {
+  const v = process.env[key];
+  if (v !== undefined) {
+    const n = parseInt(v, 10);
+    if (!isNaN(n)) return n;
+  }
+  return fallback;
+}
+
+/**
+ * 从环境变量读取布尔值
+ */
+function envBool(key: string, fallback: boolean): boolean {
+  const v = process.env[key];
+  if (v !== undefined) {
+    return ["true", "1", "yes"].includes(v.toLowerCase());
+  }
+  return fallback;
+}
+
+/**
  * 循环检测默认配置
  *
- * 参考 OpenClaw 的 loop-detection 设计。
- * 默认启用，阈值经过调优以减少误报。
+ * v4.5 放宽：historySize 30→50, warning 5→8, critical 8→12
+ * 支持环境变量覆盖：
+ * - LOOP_DETECTION_ENABLED: 是否启用
+ * - LOOP_HISTORY_SIZE: 历史窗口大小
+ * - LOOP_WARNING_THRESHOLD: 警告阈值
+ * - LOOP_CRITICAL_THRESHOLD: 严重阈值
  */
 export const DEFAULT_LOOP_DETECTION: LoopDetectionConfig = {
-  enabled: true,
-  historySize: 30,
-  warningThreshold: 5,
-  criticalThreshold: 8,
+  enabled: envBool("LOOP_DETECTION_ENABLED", true),
+  historySize: envInt("LOOP_HISTORY_SIZE", 50),
+  warningThreshold: envInt("LOOP_WARNING_THRESHOLD", 8),
+  criticalThreshold: envInt("LOOP_CRITICAL_THRESHOLD", 12),
   detectors: {
     genericRepeat: true,
     knownPollNoProgress: true,
@@ -117,15 +108,6 @@ export const DEFAULT_LOOP_DETECTION: LoopDetectionConfig = {
 
 /**
  * 获取默认 ModelConfig
- *
- * 优先从环境变量读取，否则使用安全默认值。
- *
- * 环境变量：
- * - OPENAI_BASE_URL：API 端点（如 DashScope）
- * - OPENAI_MODEL：模型名称（如 qwen3.6-plus）
- * - MODEL_PROFILE：模型预设名称（creative | balanced | precise | code | fast）
- *
- * @returns 默认模型配置
  */
 export function getDefaultModelConfig(): ModelConfig {
   const profile = process.env.MODEL_PROFILE ?? "balanced";
@@ -150,17 +132,21 @@ export function getDefaultModelConfig(): ModelConfig {
 /**
  * 获取默认 AgentConfig
  *
- * AgentConfig 控制 Agent 的运行行为，而非模型本身。
- * 这些值可被 runAgent() 的 options 参数和规划器的 suggestedConfig 覆盖。
- *
- * @returns 默认 Agent 配置
+ * v4.5 放宽：maxTurns 10→20, toolTimeout 30→60, httpTimeout 60→120
+ * 支持环境变量覆盖：
+ * - AGENT_MAX_TURNS: 最大对话轮数（默认 20）
+ * - AGENT_TOOL_TIMEOUT: 工具超时秒数（默认 60）
+ * - AGENT_HTTP_TIMEOUT: HTTP 超时秒数（默认 120）
+ * - AGENT_CONTEXT_RESERVE: 上下文预留比例（默认 0.15）
+ * - AGENT_DEBUG: 调试模式
+ * - AGENT_LOG_TOKEN_USAGE: 记录 token 使用量
  */
 export function getDefaultAgentConfig(): AgentConfig {
   return {
-    maxTurns: 10,
-    toolTimeout: 30,
-    httpTimeout: 60,
-    contextReserveRatio: 0.2,
+    maxTurns: envInt("AGENT_MAX_TURNS", 20),
+    toolTimeout: envInt("AGENT_TOOL_TIMEOUT", 60),
+    httpTimeout: envInt("AGENT_HTTP_TIMEOUT", 120),
+    contextReserveRatio: parseFloat(process.env.AGENT_CONTEXT_RESERVE ?? "0.15"),
     contextOverflowStrategy: "summarize",
     compressMessages: true,
     toolSelectionStrategy: "toolbox",
@@ -168,8 +154,8 @@ export function getDefaultAgentConfig(): AgentConfig {
     allowParallelTools: true,
     responseLanguage: "zh-CN",
     responseFormat: "markdown",
-    debug: false,
-    logTokenUsage: true,
+    debug: envBool("AGENT_DEBUG", false),
+    logTokenUsage: envBool("AGENT_LOG_TOKEN_USAGE", true),
     logFile: null,
     loopDetection: DEFAULT_LOOP_DETECTION,
   };
@@ -177,12 +163,6 @@ export function getDefaultAgentConfig(): AgentConfig {
 
 /**
  * 应用模型预设到 ModelConfig
- *
- * 将指定预设的参数应用到配置中，未指定的字段保持原值。
- *
- * @param config - 当前模型配置
- * @param profileName - 预设名称
- * @returns 应用预设后的配置
  */
 export function applyModelProfile(config: ModelConfig, profileName: string): ModelConfig {
   const profile = MODEL_PROFILES[profileName];
@@ -204,23 +184,10 @@ export function applyModelProfile(config: ModelConfig, profileName: string): Mod
 
 /**
  * 合并 Agent 配置
- *
- * 使用对象展开运算符合并基础配置和覆盖配置。
- * 覆盖配置中的值会替换基础配置中同名属性（浅合并）。
- *
- * 合并优先级（从低到高）：
- * 1. getDefaultAgentConfig() — 默认值
- * 2. runAgent(options.agentConfig) — 用户显式传入
- * 3. plan.suggestedConfig — 规划器推荐
- *
- * @param base - 基础配置
- * @param overrides - 覆盖配置
- * @returns 合并后的配置
  */
 export function mergeAgentConfig(base: AgentConfig, overrides: Partial<AgentConfig>): AgentConfig {
   const merged = { ...base, ...overrides };
 
-  // 深度合并 loopDetection
   if (overrides.loopDetection) {
     merged.loopDetection = {
       ...base.loopDetection,

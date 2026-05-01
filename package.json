@@ -1,11 +1,12 @@
 {
   "name": "mini-agent",
-  "version": "4.4.0",
-  "description": "A minimal LLM agent with two-phase planning, skill system, and self-optimization",
+  "version": "4.5.0",
+  "description": "A minimal LLM agent with two-phase planning, skill system, self-optimization, and Feishu integration",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "start": "tsx src/cli.ts",
+    "feishu": "tsx src/feishu-cli.ts",
     "test": "tsx tests/test.ts",
     "build": "tsc",
     "lint": "tsc --noEmit",
@@ -25,6 +26,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.62.1",
     "dotenv": "^16.4.7",
     "openai": "^4.77.0"
   },
