@@ -218,6 +218,17 @@ export class DefaultContextManager implements ContextManager {
   }
 
   /**
+   * 追加对话历史消息（v4.9.3 新增）
+   * 用于恢复上一轮对话的上下文
+   */
+  appendHistory(messages: Array<{ role: string; content: string }>): void {
+    for (const h of messages) {
+      this.messages.push({ role: h.role as "user" | "assistant", content: h.content });
+    }
+    this.recalculateTokens();
+  }
+
+  /**
    * 获取当前上下文状态
    */
   getState(): ContextState {

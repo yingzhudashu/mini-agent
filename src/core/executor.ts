@@ -139,10 +139,7 @@ export async function executePlan(
 
   // v4.9.3: 恢复上一轮对话历史
   if (agentConfig.conversationHistory?.length) {
-    const msgs = contextManager.getMessages();
-    for (const h of agentConfig.conversationHistory) {
-      msgs.push({ role: h.role as "user" | "assistant", content: h.content });
-    }
+    contextManager.appendHistory(agentConfig.conversationHistory);
     if (agentConfig.debug) {
       console.log(`📜 恢复对话历史: ${agentConfig.conversationHistory.length} 条消息`);
     }
