@@ -24,7 +24,7 @@
  */
 
 import 'dotenv/config';
-import { runAgent, DefaultToolRegistry, DefaultToolMonitor, getSessionManager } from './index.js';
+import { DefaultToolRegistry, DefaultToolMonitor } from './index.js';
 import { filesystemTools } from './tools/filesystem.js';
 import { execTools } from './tools/exec.js';
 import { webTools } from './tools/web.js';
@@ -33,6 +33,7 @@ import { selfOptTools } from './tools/self-opt.js';
 import { startFeishuPollServer } from './feishu/poll-server.js';
 import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from './core/instance-manager.js';
 import type { FeishuConfig } from './feishu/types.js';
+import { createFeishuHandler } from './feishu/agent-handler.js';
 
 // 读取飞书配置
 const forceMode = process.argv.includes('--force');
@@ -89,47 +90,12 @@ for (const [name, tool] of Object.entries(webTools)) registry.register(name, too
 for (const [name, tool] of Object.entries(skillsTools)) registry.register(name, tool);
 for (const [name, tool] of Object.entries(selfOptTools)) registry.register(name, tool);
 
-// v4.7: 初始化 SessionManager
-const sessionManager = getSessionManager(registry);
-console.log('🧩 多会话管理已初始化');
-
-// 消息处理函数
-async function handleMessage(
-  content: string,
-  chatId: string,
-  senderId: string
-): Promise<string> {
-  try {
-    console.log(`[Agent] 处理消息: ${content.slice(0, 50)}...`);
-
-    // v4.7: 获取或创建会话上下文
-    const sessionKey = chatId || senderId || 'default';
-    const sessionCtx = sessionManager.getOrCreate(sessionKey, {
-      chatId,
-      senderId,
-    });
-
-    const result = await runAgent(content, {
-      registry,
-      monitor,
-      agentConfig: {
-        sessionKey,
-        sessionRegistry: sessionCtx.registry,
-        sessionWorkspace: sessionCtx.config.filesPath,
-        conversationHistory: sessionCtx.conversationHistory,
-      },
-    });
-
-    // v4.9.3: 更新对话历史
-    sessionCtx.conversationHistory.push({ role: "user", content });
-    sessionCtx.conversationHistory.push({ role: "assistant", content: result });
-
-    return result;
-  } catch (err) {
-    console.error(`[飞书] Agent 处理失败:`, err);
-    return '抱歉，处理您的消息时出现了错误。';
-  }
-}
+// v4.9.3: 复用共享飞书消息处理器
+const handleMessage = createFeishuHandler({
+  registry,
+  monitor,
+  toolboxes: [], // feishu-cli 没有 toolbox 分组，用空数组
+});
 
 // 启动长轮询服务器
 console.log('🦞 Mini Agent 飞书模式启动中...');

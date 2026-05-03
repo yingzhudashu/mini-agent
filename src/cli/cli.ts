@@ -73,6 +73,7 @@ import { runProposalTests, formatTestResults, executeOptimization } from "../cor
 import { autoOptimize, formatAutoOptimizeResult } from "../core/self-opt/auto-optimizer.js";
 import { startFeishuPollServer } from "../feishu/poll-server.js";
 import type { FeishuConfig } from "../feishu/types.js";
+import { createFeishuHandler } from "../feishu/agent-handler.js";
 
 /** ESM 下手动获取 __dirname */
 const __filename = fileURLToPath(import.meta.url);
@@ -222,40 +223,14 @@ async function main() {
         port: 0,
       };
 
-      async function handleFeishuMessage(
-        content: string,
-        chatId: string,
-        senderId: string
-      ): Promise<string> {
-        try {
-          console.log(`[飞书] 处理: ${content.slice(0, 50)}...`);
-          const sessionKey = `feishu:${chatId || senderId || 'default'}`;
-          const sessionCtx = sessionManager.getOrCreate(sessionKey, {
-            chatId,
-            senderId,
-          });
-          const result = await runAgent(content, {
-            registry,
-            monitor,
-            toolboxes: allToolboxes,
-            agentConfig: {
-              debug: true,
-              sessionKey,
-              sessionRegistry: sessionCtx.registry,
-              sessionWorkspace: sessionCtx.config.filesPath,
-              conversationHistory: sessionCtx.conversationHistory,
-            },
-            systemPrompt: skillPrompts.length > 0 ? skillPrompts.join("\n\n") : undefined,
-          });
-          // v4.9.3: 更新对话历史
-          sessionCtx.conversationHistory.push({ role: "user", content });
-          sessionCtx.conversationHistory.push({ role: "assistant", content: result });
-          return result;
-        } catch (err: any) {
-          console.error(`[飞书] 处理失败:`, err);
-          return "抱歉，处理您的消息时出现了错误。";
-        }
-      }
+      // v4.9.3: 复用共享飞书消息处理器
+      const handleFeishuMessage = createFeishuHandler({
+        registry,
+        monitor,
+        toolboxes: allToolboxes,
+        skills: skillRegistry.getAll(),
+        skillPrompts,
+      });
 
       // 后台启动飞书，不阻塞 readline
       startFeishuPollServer(feishuConfig, handleFeishuMessage).catch((err) => {
