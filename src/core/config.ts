@@ -4,6 +4,7 @@
  *   提供双层配置体系，将「模型层」和「Agent 层」的配置分离。
  *
  *   v4.5 更新：支持环境变量覆盖关键参数，方便在不同部署环境下调整行为。
+ *   v4.6 更新：新增上下文管理配置（contextWindow、contextCompressThreshold）。
  *
  * @module core/config
  */
@@ -121,7 +122,8 @@ export function getDefaultModelConfig(): ModelConfig {
     maxTokens: preset.maxTokens,
     thinkingLevel: preset.thinkingLevel,
     thinkingBudget: preset.thinkingBudget,
-    contextWindow: 8192,
+    // v4.6: 上下文窗口（token），默认 qwen3.6-plus 为 128K
+    contextWindow: envInt("AGENT_CONTEXT_WINDOW", 128000),
     stream: false,
     retryCount: 2,
     profiles: MODEL_PROFILES,
@@ -133,11 +135,13 @@ export function getDefaultModelConfig(): ModelConfig {
  * 获取默认 AgentConfig
  *
  * v4.5 放宽：maxTurns 10→20, toolTimeout 30→60, httpTimeout 60→120
+ * v4.6 新增：contextCompressThreshold 上下文压缩触发阈值
  * 支持环境变量覆盖：
  * - AGENT_MAX_TURNS: 最大对话轮数（默认 20）
  * - AGENT_TOOL_TIMEOUT: 工具超时秒数（默认 60）
  * - AGENT_HTTP_TIMEOUT: HTTP 超时秒数（默认 120）
  * - AGENT_CONTEXT_RESERVE: 上下文预留比例（默认 0.15）
+ * - AGENT_CONTEXT_COMPRESS_THRESHOLD: 压缩触发阈值（默认 0.6，即 60% 窗口）
  * - AGENT_DEBUG: 调试模式
  * - AGENT_LOG_TOKEN_USAGE: 记录 token 使用量
  */
@@ -147,6 +151,7 @@ export function getDefaultAgentConfig(): AgentConfig {
     toolTimeout: envInt("AGENT_TOOL_TIMEOUT", 60),
     httpTimeout: envInt("AGENT_HTTP_TIMEOUT", 120),
     contextReserveRatio: parseFloat(process.env.AGENT_CONTEXT_RESERVE ?? "0.15"),
+    contextCompressThreshold: parseFloat(process.env.AGENT_CONTEXT_COMPRESS_THRESHOLD ?? "0.6"),
     contextOverflowStrategy: "summarize",
     compressMessages: true,
     toolSelectionStrategy: "toolbox",

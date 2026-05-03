@@ -14,6 +14,8 @@
  *   8. ClawHub — 技能市场（v4.1 新增）
  *   9. LoopDetection — 循环检测（v4.1 新增）
  *   10. ModelProfile — 模型配置预设（v4.1 新增）
+ *   11. Memory — 跨会话记忆（v4.6 新增）
+ *   12. Context — 上下文管理（v4.6 新增）
  *
  *   设计原则：
  *   - 接口尽量小且明确，避免过度抽象
@@ -24,7 +26,7 @@
  * @module core/types
  */
 
-import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ChatCompletionTool, ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 // ============================================================================
 // Toolbox types — 工具箱定义
@@ -159,6 +161,120 @@ export interface LoopDetectionResult {
 }
 
 // ============================================================================
+// Memory — 跨会话记忆（v4.6 新增）
+// ============================================================================
+
+/**
+ * 记忆条目：从单轮对话中提取的信息
+ */
+export interface MemoryEntry {
+  /** 时间戳 */
+  timestamp: string;
+  /** 用户消息摘要（前 100 字符） */
+  userSnippet: string;
+  /** 本轮对话摘要 */
+  summary: string;
+  /** 提取的关键事实 */
+  facts: string[];
+}
+
+/**
+ * 会话记忆：持久化的跨会话记忆数据
+ */
+export interface SessionMemory {
+  /** 会话唯一标识（chatId 或 senderId） */
+  sessionId: string;
+  /** 运行累计摘要 */
+  cumulativeSummary: string;
+  /** 关键事实列表（去重后保留） */
+  keyFacts: string[];
+  /** 历史条目列表（最近 N 条） */
+  entries: MemoryEntry[];
+  /** 累计对话轮数 */
+  totalTurns: number;
+  /** 首次活跃时间 */
+  firstSeen: string;
+  /** 最后活跃时间 */
+  lastActive: string;
+  /** 关联的聊天室 ID */
+  chatId?: string;
+  /** 关联的发送者 ID */
+  senderId?: string;
+}
+
+/**
+ * 简化的条目输入（用于 addEntry，facts 可选）
+ */
+export interface MemoryEntryInput {
+  timestamp: string;
+  userSnippet: string;
+  summary: string;
+  facts?: string[];
+}
+
+/**
+ * 记忆存储接口
+ */
+export interface MemoryStore {
+  /** 加载会话记忆 */
+  load(sessionKey: string): Promise<SessionMemory | null>;
+  /** 保存会话记忆 */
+  save(memory: SessionMemory): Promise<void>;
+  /** 更新摘要和事实 */
+  updateSummary(sessionKey: string, summary: string, facts: string[]): Promise<void>;
+  /** 添加条目 */
+  addEntry(sessionKey: string, entry: MemoryEntryInput): Promise<void>;
+}
+
+// ============================================================================
+// Context — 上下文管理（v4.6 新增）
+// ============================================================================
+
+/**
+ * 消息的 token 估算结果
+ */
+export interface TokenEstimate {
+  /** 消息的估算 token 数 */
+  tokens: number;
+  /** 原始字符长度 */
+  charLength: number;
+}
+
+/**
+ * 上下文状态：跟踪当前消息列表和 token 使用
+ */
+export interface ContextState {
+  /** 当前消息列表 */
+  messages: ChatCompletionMessageParam[];
+  /** 当前估算的总 token 数 */
+  totalTokens: number;
+  /** 是否已被压缩过 */
+  compressed: boolean;
+}
+
+/**
+ * 上下文管理器接口
+ */
+export interface ContextManager {
+  /** 获取当前上下文状态 */
+  getState(): ContextState;
+  /** 初始化消息（system + user） */
+  init(systemPrompt: string, userInput: string): void;
+  /** 追加消息并检查是否需要压缩 */
+  append(msg: ChatCompletionMessageParam): void;
+  /** 检查是否需要压缩 */
+  needsCompression(): boolean;
+  /** 执行压缩（保留首尾，中间摘要） */
+  compress(): void;
+  /** 注入记忆摘要到 system prompt */
+  injectMemory(memory: SessionMemory | null): void;
+  /** 获取当前 token 使用报告 */
+  getTokenReport(): string;
+  /** 获取当前消息列表 */
+  getMessages(): ChatCompletionMessageParam[];
+}
+
+// ============================================================================
 // Model Config — 模型层配置
 // ============================================================================
 
@@ -243,6 +359,8 @@ export interface AgentConfig {
   httpTimeout: number;
   /** 上下文保留比例（默认 0.2，即保留 20% 窗口给新输入） */
   contextReserveRatio: number;
+  /** 上下文触发压缩的阈值比例（默认 0.7，即使用 70% 窗口时触发） */
+  contextCompressThreshold: number;
   /** 上下文溢出处理策略 */
   contextOverflowStrategy: "summarize" | "truncate" | "error";
   /** 是否压缩消息（移除冗余空白、缩短工具结果） */
@@ -269,6 +387,8 @@ export interface AgentConfig {
   loopDetection?: Partial<LoopDetectionConfig>;
   /** 模型覆盖（运行时可动态切换模型参数） */
   modelOverrides?: Partial<ModelConfig>;
+  /** 会话记忆（v4.6 新增，可选） */
+  sessionKey?: string;
 }
 
 // ============================================================================
@@ -434,7 +554,7 @@ export interface Skill {
   id: string;
   /** 技能名称 */
   name: string;
-  /** 技能描述（用于 LLM 规划阶段理解能力） */
+  /** 技能描述 */
   description: string;
   /** 关键词，辅助 LLM 匹配 */
   keywords: string[];

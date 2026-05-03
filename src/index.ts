@@ -69,6 +69,13 @@ export { OutputManager } from "./core/output-manager.js";
 export { LoopDetector, DefaultLoopDetector } from "./core/loop-detector.js";
 export { appendLog, truncate } from "./core/logger.js";
 
+// ── v4.6: 上下文管理与记忆系统 ──
+export { DefaultContextManager } from "./core/context-manager.js";
+export { memoryStore, formatMemoryForPrompt, extractFacts, generateTurnSummary } from "./core/memory-store.js";
+
+// ── v4.6: 单实例管理 ──
+export { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "./core/instance-manager.js";
+
 // ── 自我优化工具 (v4.2) ──
 export { selfOptTools } from "./tools/self-opt.js";
 export { inspectSelf } from "./core/self-opt/inspector.js";

@@ -65,6 +65,9 @@ import { getDefaultModelConfig, getDefaultAgentConfig, mergeAgentConfig } from "
 import { appendLog, truncate } from "./logger.js";
 import { LoopDetector } from "./loop-detector.js";
 import { DEFAULT_LOOP_DETECTION } from "./config.js";
+// v4.6: 上下文管理与记忆
+import { DefaultContextManager } from "./context-manager.js";
+import { memoryStore, extractFacts, generateTurnSummary } from "./memory-store.js";
 
 // ============================================================================
 // OpenAI 客户端
@@ -157,27 +160,53 @@ async function executePlan(
   const loopConfig = agentConfig.loopDetection ?? DEFAULT_LOOP_DETECTION;
   const loopDetector = new LoopDetector(loopConfig);
 
-  // 初始化消息列表
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: `你是一个有用的助手。${plan.summary}` },
-    { role: "user", content: userInput },
-  ];
+  // v4.6: 使用上下文管理器替代原始的 messages 数组
+  const modelConfig = getDefaultModelConfig();
+  const contextManager = new DefaultContextManager(
+    modelConfig.contextWindow,
+    agentConfig.contextCompressThreshold,
+    tools,
+  );
+
+  // 构建 system prompt
+  let systemPrompt = `你是一个有用的助手。${plan.summary}`;
+
+  // v4.6: 加载并注入会话记忆
+  if (agentConfig.sessionKey) {
+    const memory = await memoryStore.load(agentConfig.sessionKey);
+    if (memory) {
+      contextManager.init(systemPrompt, userInput);
+      contextManager.injectMemory(memory);
+    } else {
+      contextManager.init(systemPrompt, userInput);
+    }
+  } else {
+    contextManager.init(systemPrompt, userInput);
+  }
 
   const maxTurns = agentConfig.maxTurns;
   let turns = maxTurns;
   let loopWarningShown = false;
+
+  // v4.6: 跟踪工具调用和回复，用于会话结束后保存记忆
+  const turnToolCalls: Array<{ name: string; args: string; result?: string }> = [];
+  let finalReply = "";
 
   // 调试日志
   if (agentConfig.debug) {
     console.log(`\n🔧 使用 ${tools.length} 个工具 (策略: ${agentConfig.toolSelectionStrategy})`);
     console.log(`📊 计划: ${plan.summary}`);
     console.log(`🔄 最大轮数: ${maxTurns} | 循环检测: ${loopConfig.enabled ? "启用" : "禁用"}`);
+    console.log(`📦 上下文窗口: ${modelConfig.contextWindow} tokens | 压缩阈值: ${(agentConfig.contextCompressThreshold * 100).toFixed(0)}%`);
   }
 
   // ── ReAct 循环 ──
   // 每次循环 = 一次 LLM 调用 + 可能的工具调用
   while (turns-- > 0) {
     const startMs = Date.now();
+
+    // v4.6: 使用上下文管理器获取消息列表
+    const messages = contextManager.getMessages();
 
     if (agentConfig.debug) {
       console.log(`\n📨 LLM 请求 (第 ${maxTurns - turns} 轮):`);
@@ -218,20 +247,46 @@ async function executePlan(
 
     // 没有工具调用 → LLM 给出了最终回复
     if (!msg.tool_calls?.length) {
-      const reply = msg.content || "(空回复)";
+      finalReply = msg.content || "(空回复)";
       monitor.record("llm_response", Date.now() - startMs, true);
-      return reply;
+
+      // v4.6: 追加到上下文管理器
+      contextManager.append(msg);
+
+      // v4.6: 保存会话记忆
+      if (agentConfig.sessionKey && finalReply) {
+        const facts = extractFacts(userInput + " " + finalReply);
+        const summary = generateTurnSummary(userInput, turnToolCalls, finalReply);
+        const now = new Date().toISOString();
+        await memoryStore.updateSummary(agentConfig.sessionKey, summary, facts);
+        await memoryStore.addEntry(agentConfig.sessionKey, {
+          timestamp: now,
+          userSnippet: userInput.slice(0, 100),
+          summary,
+          facts,
+        });
+        if (agentConfig.debug) {
+          console.log(`💾 记忆已保存 [${agentConfig.sessionKey}]`);
+          console.log(`   提取事实: ${facts.length > 0 ? facts.join("; ") : "无"}`);
+        }
+      }
+
+      if (agentConfig.debug) {
+        console.log(contextManager.getTokenReport());
+      }
+
+      return finalReply;
     }
 
-    // 将 LLM 回复（包含 tool_calls）追加到消息历史
-    messages.push(msg);
+    // v4.6: 使用上下文管理器追加 LLM 回复
+    contextManager.append(msg);
 
     // ── 按顺序执行每个工具调用 ──
     for (const tc of msg.tool_calls) {
       const tool = registry.get(tc.function.name);
       if (!tool) {
         // 未知工具：返回错误信息，让 LLM 自我纠正
-        messages.push({
+        contextManager.append({
           role: "tool",
           tool_call_id: tc.id,
           content: `错误：未知工具 ${tc.function.name}。可用: ${registry.list().join(", ")}`,
@@ -278,31 +333,22 @@ async function executePlan(
         const args = JSON.parse(tc.function.arguments);
         result = await tool.handler(args, ctx);
 
+        // v4.6: 记录工具调用，用于记忆保存
+        turnToolCalls.push({ name: tc.function.name, args: tc.function.arguments, result: result.content });
+
         // 记录到循环检测器
         loopDetector.record(tc.function.name, args, result.content);
       } catch (err: any) {
         // 执行异常：不抛出，而是作为失败结果返回给 LLM
         result = { success: false, content: `❌ 执行异常: ${err?.message ?? err}` };
+        turnToolCalls.push({ name: tc.function.name, args: tc.function.arguments });
       }
 
       // 记录性能数据
       monitor.record(tc.function.name, Date.now() - toolStart, result.success);
 
-      // ── 上下文管理：消息过长时压缩历史（v4.1 新增） ──
-      // 参考 OpenClaw 的 context overflow 策略
-      if (agentConfig.contextOverflowStrategy === "summarize" && messages.length > 12) {
-        const keepStart = 2; // system + first user
-        const keepEnd = 4;   // 最近 4 条
-        const compressed = messages.slice(keepStart, messages.length - keepEnd);
-        const summary = `[压缩了 ${compressed.length} 条历史消息，共 ${compressed.reduce((n, m) => n + ((m.content as string)?.length || 0), 0)} 字符]`;
-        messages.splice(keepStart, compressed.length, { role: "system", content: summary });
-        if (agentConfig.debug) {
-          console.log(`📦 上下文压缩：移除 ${compressed.length} 条历史消息`);
-        }
-      }
-
-      // 将工具结果追加到消息历史
-      messages.push({ role: "tool", tool_call_id: tc.id, content: result.content });
+      // v4.6: 使用上下文管理器追加工具结果（自动触发压缩）
+      contextManager.append({ role: "tool", tool_call_id: tc.id, content: result.content });
 
       // 回调通知（用于 CLI 日志展示）
       onToolCall?.(tc.function.name, tc.function.arguments, result.content);
@@ -311,6 +357,25 @@ async function executePlan(
 
   // 达到最大轮数 → 提供有用的反馈
   const loopStats = loopDetector.getStats();
+
+  // v4.6: 保存会话记忆（即使未完成任务）
+  if (agentConfig.sessionKey) {
+    const facts = extractFacts(userInput);
+    const summary = generateTurnSummary(userInput, turnToolCalls, "达到最大轮数，任务未完成");
+    const now = new Date().toISOString();
+    await memoryStore.updateSummary(agentConfig.sessionKey, summary, facts);
+    await memoryStore.addEntry(agentConfig.sessionKey, {
+      timestamp: now,
+      userSnippet: userInput.slice(0, 100),
+      summary,
+      facts,
+    });
+  }
+
+  if (agentConfig.debug) {
+    console.log(contextManager.getTokenReport());
+  }
+
   return `⚠️ 达到最大调用次数（${maxTurns} 轮），任务未完成。\n\n建议：\n- 简化请求，分步骤执行\n- 明确具体目标\n- 检查是否存在重复操作模式\n\n📊 本轮统计：工具调用 ${loopStats.totalCalls} 次`;
 }
 

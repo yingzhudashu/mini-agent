@@ -31,9 +31,28 @@ import { webTools } from './tools/web.js';
 import { skillsTools } from './tools/skills.js';
 import { selfOptTools } from './tools/self-opt.js';
 import { startFeishuPollServer } from './feishu/poll-server.js';
+import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from './core/instance-manager.js';
 import type { FeishuConfig } from './feishu/types.js';
 
 // 读取飞书配置
+const forceMode = process.argv.includes('--force');
+
+// 🔴 单实例检查
+const instanceResult = forceMode ? forceAcquireInstance() : tryAcquireInstance();
+if (!instanceResult.success) {
+  if ('existingPid' in instanceResult) {
+    console.error(`❌ Mini Agent 已在运行 (PID=${instanceResult.existingPid})`);
+    console.error(`   请先停止旧实例，或使用 --force 强制替换。`);
+    console.error(``);
+    console.error(`   强制启动: node dist/feishu-cli.js --force`);
+  } else {
+    console.error(`❌ 无法获取实例锁: ${instanceResult.reason}`);
+  }
+  process.exit(1);
+}
+
+// 注册退出钩：进程退出时释放锁（兜底）
+process.on('exit', releaseInstance);
 const appId = process.env.FEISHU_APP_ID;
 const appSecret = process.env.FEISHU_APP_SECRET;
 
@@ -65,15 +84,21 @@ for (const [name, tool] of Object.entries(selfOptTools)) registry.register(name,
 // 消息处理函数
 async function handleMessage(
   content: string,
-  _chatId: string,
-  _senderId: string
+  chatId: string,
+  senderId: string
 ): Promise<string> {
   try {
     console.log(`[Agent] 处理消息: ${content.slice(0, 50)}...`);
 
+    // v4.6: 使用 chatId + senderId 作为会话 key，实现跨会话记忆
+    const sessionKey = chatId || senderId || 'default';
+
     const result = await runAgent(content, {
       registry,
       monitor,
+      agentConfig: {
+        sessionKey,
+      },
     });
 
     return result;
@@ -88,12 +113,5 @@ console.log('🦞 Mini Agent 飞书模式启动中...');
 await startFeishuPollServer(feishuConfig, handleMessage);
 
 // 优雅退出
-process.on('SIGINT', () => {
-  console.log('\n👋 飞书服务器已停止');
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  console.log('\n👋 飞书服务器已停止');
-  process.exit(0);
-});
+// 注意：SIGINT/SIGTERM 已由 poll-server.ts 内部处理（含 gracefulShutdown + releaseInstance）
+// 此处不重复注册，避免 race condition

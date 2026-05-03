@@ -51,6 +51,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "readline";
 import { runAgent, MODEL } from "./core/agent.js";
+import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "./core/instance-manager.js";
 import { DefaultToolRegistry } from "./core/registry.js";
 import { DefaultToolMonitor } from "./core/monitor.js";
 import { DefaultSkillRegistry } from "./core/skill-registry.js";
@@ -135,6 +136,31 @@ async function loadSkills() {
  * 两阶段模式：先规划（Phase 1）后执行（Phase 2）。
  */
 async function main() {
+  // ── 🔴 单实例检查 ──
+  const forceMode = process.argv.includes("--force");
+  const instanceResult = forceMode ? forceAcquireInstance() : tryAcquireInstance();
+  if (!instanceResult.success) {
+    if ("existingPid" in instanceResult) {
+      console.error(`❌ Mini Agent 已在运行 (PID=${instanceResult.existingPid})`);
+      console.error(`   请先停止旧实例，或使用 --force 强制替换。`);
+      console.error(``);
+      console.error(`   强制启动: node dist/cli.js --force`);
+    } else {
+      console.error(`❌ 无法获取实例锁: ${instanceResult.reason}`);
+    }
+    process.exit(1);
+  }
+
+  // 注册退出钩：确保退出时释放锁
+  process.on("exit", releaseInstance);
+  // SIGINT/SIGTERM：仅飞书未启动时注册（启动后 poll-server 会处理）
+  let feishuStarted = false;
+  const setupSignalHandlers = () => {
+    if (feishuStarted) return; // poll-server 已接管
+    process.on("SIGINT", () => { releaseInstance(); process.exit(0); });
+    process.on("SIGTERM", () => { releaseInstance(); process.exit(0); });
+  };
+  setupSignalHandlers();
   // ── 加载技能包 ──
   await loadSkills();
 
@@ -196,6 +222,7 @@ async function main() {
       startFeishuPollServer(feishuConfig, handleFeishuMessage).catch((err) => {
         console.error("❌ 飞书长轮询启动失败:", err);
       });
+      feishuStarted = true; // poll-server 已接管 SIGINT/SIGTERM
     } catch (err: any) {
       console.error("❌ 飞书初始化失败:", err);
     }
@@ -444,6 +471,7 @@ async function main() {
 
   // ── 清理和退出 ──
   rl.close();
+  releaseInstance();
   console.log("\n👋 bye");
   console.log("\n" + monitor.report());
 }
