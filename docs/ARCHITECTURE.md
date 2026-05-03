@@ -1,6 +1,10 @@
 # Mini Agent 架构文档
 
-> 本文档描述 Mini Agent v4 的整体架构设计、模块划分和数据流。
+> **版本**: v4.8  
+> **最后更新**: 2026-05-03  
+> **描述**: Mini Agent v4 的整体架构设计、模块划分和数据流
+
+---
 
 ## 系统概览
 
@@ -13,362 +17,214 @@ Mini Agent 是一个基于 TypeScript 的最小化 LLM Agent，采用 **两阶�
 │  ┌────────────────────────────────────────────────────┐     │
 │  │  Phase 1: Planning（规划阶段）                       │     │
 │  │                                                     │     │
-│  │  输入: 用户需求 + 工具箱描述（内置 + 技能贡献）        │     │
-│  │  输出: StructuredPlan                               │     │
-│  │    - 步骤分解、工具箱选择、配置推荐、Token 预估        │     │
-│  └──────────────────────┬─────────────────────────────┘     │
-│                         ↓                                    │
+│  │  输入: 用户需求 + 工具箱描述（内置 + 技能贡献）        │    │
+│  │  过程: LLM 分析需求，生成结构化执行计划                │    │
+│  │  输出: StructuredPlan（步骤、工具箱、配置、预估）      │    │
+│  └──────────────────────┬──────────────────────────────┘     │
+│                         ↓                                   │
 │  ┌────────────────────────────────────────────────────┐     │
 │  │  Phase 2: Execution（执行阶段）                      │     │
 │  │                                                     │     │
-│  │  ReAct 循环: 思考 → 工具调用 → 执行 → 反馈 → 循环    │     │
-│  │  工具筛选: 只发送 plan.requiredToolboxes 的工具       │     │
-│  └──────────────────────┬─────────────────────────────┘     │
-│                         ↓                                    │
-│                      最终回复                                 │
+│  │  输入: StructuredPlan + 用户需求                     │    │
+│  │  过程: ReAct 循环（思考 → 工具调用 → 执行 → 反馈）    │    │
+│  │  输出: 最终回复                                     │    │
+│  │                                                     │     │
+│  │  v4.1 新增机制:                                     │    │
+│  │  - 循环检测（LoopDetector）：防止无限循环            │    │
+│  │  - 上下文压缩：消息过长时自动摘要历史                 │    │
+│  └────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## 模块架构
+---
+
+## 目录结构
 
 ```
-mini-agent/
-├── src/
-│   ├── cli.ts                    ← CLI 入口（用户界面层）
-│   │   ├── 初始化所有子系统
-│   │   ├── 发现并加载技能包
-│   │   ├── 启动 readline 循环
-│   │   └── 处理内置命令
-│   │
-│   ├── index.ts                  ← 统一导出（Barrel File）
-│   │
-│   ├── core/                     ← 核心子系统
-│   │   ├── types.ts              ← 所有 TypeScript 类型定义
-│   │   ├── agent.ts              ← Phase 2: ReAct 循环 + 主入口
-│   │   ├── planner.ts            ← Phase 1: 规划器
-│   │   ├── registry.ts           ← 工具注册表
-│   │   ├── monitor.ts            ← 性能监控器
-│   │   ├── config.ts             ← 双层配置系统
-│   │   ├── logger.ts             ← 增量日志写入器
-│   │   ├── output-manager.ts     ← CLI 输出管理器
-│   │   ├── skill-registry.ts     ← 技能注册表
-│   │   └── skill-loader.ts       ← 技能包自动发现与加载
-│   │
-│   ├── tools/                    ← 工具实现
-│   │   ├── filesystem.ts         ← 8 个文件操作工具
-│   │   ├── exec.ts               ← shell 命令执行工具
-│   │   └── web.ts                ← 网页抓取 + 时间工具
-│   │
-│   ├── security/                 ← 安全模块
-│   │   └── sandbox.ts            ← 路径沙箱
-│   │
-│   └── toolboxes.ts              ← 默认工具箱定义
-│
-├── skills/                       ← 技能包目录
-│   ├── README.md                 ← 技能系统文档
-│   └── default/                  ← 默认技能包
-│       ├── SKILL.md
-│       ├── index.ts
-│       └── files/
-│           └── SKILL.md
-│
-├── tests/
-│   └── test.ts                   ← 集成测试
-│
-└── docs/
-    └── ARCHITECTURE.md           ← 本文档
+src/
+├── types/              # 类型定义（按领域拆分）
+│   ├── index.ts        # barrel export
+│   ├── tool.ts         # 工具/工具箱/注册表类型
+│   ├── config.ts       # 双层配置体系
+│   ├── loop.ts         # 循环检测
+│   ├── memory.ts       # 跨会话记忆
+│   ├── context.ts      # 上下文管理
+│   ├── planning.ts     # 规划系统
+│   ├── pipeline.ts     # 线性管线
+│   ├── stats.ts        # 性能监控
+│   ├── skill.ts        # 技能系统
+│   ├── clawhub.ts      # 技能市场
+│   ├── session.ts      # 会话管理
+│   └── agent.ts        # Agent 运行结果
+├── core/               # 核心引擎
+│   ├── agent.ts        # 薄编排层：plan → execute
+│   ├── executor.ts     # ReAct 循环执行器（v4.8 拆分）
+│   ├── planner.ts      # Phase 1: LLM 规划
+│   ├── registry.ts     # 工具注册表
+│   ├── monitor.ts      # 性能监控
+│   ├── config.ts       # 双层配置 + 预设
+│   ├── logger.ts       # 增量日志
+│   ├── loop-detector.ts
+│   ├── context-manager.ts
+│   ├── memory-store.ts
+│   ├── keyword-index.ts
+│   ├── session-manager.ts  # → re-export from session/
+│   ├── workspace-manager.ts # → re-export from session/
+│   ├── skill-registry.ts
+│   ├── skill-loader.ts
+│   ├── clawhub-client.ts
+│   ├── output-manager.ts
+│   ├── instance-manager.ts
+│   └── self-opt/       # 自我优化子系统
+├── tools/              # 工具实现
+│   ├── filesystem.ts
+│   ├── exec.ts
+│   ├── web.ts
+│   ├── skills.ts
+│   └── self-opt.ts
+├── security/           # 安全
+│   └── sandbox.ts
+├── session/            # 会话管理（v4.7 新增）
+│   ├── manager.ts      # SessionManager
+│   ├── workspace.ts    # WorkspaceManager
+│   └── index.ts        # barrel export
+├── feishu/             # 飞书适配层
+│   ├── types.ts
+│   ├── server.ts
+│   └── poll-server.ts
+├── cli/                # CLI 入口（v4.8 移动）
+│   └── cli.ts
+├── feishu-cli.ts       # 飞书入口
+├── toolboxes.ts        # 默认工具箱定义
+└── index.ts            # barrel export
 ```
 
-## 核心子系统详解
+---
 
-### 1. 两阶段架构（Plan-then-Execute）
+## 核心模块
 
-#### Phase 1: Planning（规划阶段）
+### 1. Agent 引擎（`core/agent.ts` + `core/executor.ts`）
 
-**文件**: `src/core/planner.ts`
+**职责**：两阶段架构的编排和执行。
 
-**职责**: 分析用户需求，生成结构化执行计划（StructuredPlan）
+- `runAgent()`: 主入口，协调 Phase 1 → Phase 2
+- `executePlan()`: ReAct 循环执行器（v4.8 从 agent.ts 拆分）
+- `runPipeline()`: 线性管线执行器（无 LLM 循环）
 
-**流程**:
-1. 接收用户输入 + 可用工具箱列表
-2. 构建 system prompt（规划专家角色 + JSON schema）
-3. 调用 LLM（temperature=0.3，追求结构化输出稳定性）
-4. 解析 JSON 响应 → 校验必要字段
-5. 失败时最多重试 3 次，全部失败返回 fallback plan
+**配置合并优先级**（从低到高）：
+1. `getDefaultAgentConfig()` → 默认值
+2. `runAgent(options.agentConfig)` → 用户传入
+3. `plan.suggestedConfig` → 规划器推荐
 
-**关键字段**:
-- `steps[]`: 执行步骤列表
-- `requiredToolboxes[]`: 需要的工具箱 ID
-- `suggestedConfig`: 推荐的运行配置
-- `estimatedTokens`: Token 消耗预估
-- `riskLevel`: 风险等级（low/medium/high）
-- `requiresConfirmation`: 是否需要用户确认
+### 2. 规划器（`core/planner.ts`）
 
-#### Phase 2: Execution（执行阶段）
+**职责**：Phase 1，生成结构化执行计划。
 
-**文件**: `src/core/agent.ts`
+- 分析用户需求 + 可用工具箱
+- LLM 生成 `StructuredPlan`
+- 包含步骤、工具箱选择、配置推荐、Token 预估
 
-**职责**: 根据规划结果，运行 ReAct 循环执行任务
+### 3. 工具系统（`tools/` + `core/registry.ts`）
 
-**流程**:
-1. 根据 `plan.requiredToolboxes` 筛选工具
-2. 初始化消息列表（system + user）
-3. ReAct 循环:
-   - LLM 回复 → 纯文本 = 完成 / tool_calls = 执行
-   - 按序执行每个工具调用
-   - 将结果追加到消息历史
-4. 达到 maxTurns 或 LLM 不再调用工具时结束
+**职责**：工具的定义、注册和执行。
 
-**工具筛选策略**:
-- `all`: 发送全部工具
-- `toolbox`: 只发送相关工具箱的工具（默认）
-- `auto`: 预留，未来可用语义匹配
+- `ToolDefinition`: 工具定义（schema + handler + permission）
+- `DefaultToolRegistry`: 工具注册表实现
+- `ToolContext`: 执行上下文（cwd、allowedPaths、permission）
 
-### 2. 工具箱系统（Toolbox System）
+### 4. 技能系统（`core/skill-registry.ts` + `core/skill-loader.ts`）
 
-**文件**: `src/toolboxes.ts`
+**职责**：技能的发现、加载和贡献合并。
 
-工具箱是粗粒度的能力分组，与工具的 `toolbox` 字段对应：
+- 自动发现 `skills/` 目录下的技能包
+- 合并技能贡献的工具和工具箱
+- 支持 ClawHub 技能市场
 
-| ID | 名称 | 包含工具 |
-|----|------|---------|
-| `file_read` | 文件读取 | `read_file` |
-| `file_write` | 文件写入 | `write_file`, `edit_file` |
-| `dir_ops` | 目录操作 | `list_dir`, `create_dir`, `move_file`, `copy_file`, `delete_file` |
-| `exec` | 命令执行 | `exec_command` |
-| `web` | 网络访问 | `fetch_url` |
-| `core` | 核心能力 | `get_time` |
+### 5. 会话管理（`session/`）
 
-**筛选规则**:
-- 工具的 `toolbox` 字段在 `requiredToolboxes` 中 → 包含
-- 工具的 `toolbox` 未设置 → 始终包含（核心能力）
-- `requiredToolboxes` 为空 → 返回全部工具
+**职责**：多会话隔离和管理（v4.7 新增）。
 
-### 3. 技能系统（Skill System）
+- 每个会话拥有独立的：
+  - 工具注册表（可从全局克隆并裁剪）
+  - 工作空间路径（可选）
+  - 配置覆盖
+- 支持会话创建、切换、销毁
+- 工具升维/降维（会话 ↔ 主空间）
 
-**文件**: `src/core/skill-registry.ts`, `src/core/skill-loader.ts`
+### 6. 记忆系统（`core/memory-store.ts` + `core/keyword-index.ts`）
 
-技能系统是 v4 新增的模块化扩展机制。
+**三层记忆架构**（v4.6）：
+- **Layer 1**: 上下文记忆（当前对话历史）
+- **Layer 2**: 会话记忆（同聊天室的长期记忆，持久化到文件）
+- **Layer 3**: 语义检索（跨所有会话的相关记忆，关键词索引）
 
-#### 架构层次
+### 7. 上下文管理（`core/context-manager.ts`）
 
-```
-Skill Package（技能包）
-├── SKILL.md（人类可读文档）
-├── index.ts（导出 Skill[]）
-└── <skill-id>/
-    ├── SKILL.md（技能文档）
-    └── tools.ts（工具定义）
+**职责**：Token 估算与上下文压缩。
 
-Skill（技能）
-├── tools → 注册到 ToolRegistry
-├── toolboxes → 合并到 Toolbox 列表
-├── systemPrompt → 追加到 system prompt
-└── skillMd → 人类可读文档
-```
+- 基于字符类型的启发式 Token 估算
+- 上下文预算管理
+- 智能压缩（保留 system + 首条用户消息 + 最近 2 轮对话）
+- 记忆注入
 
-#### 加载流程
+### 8. 循环检测（`core/loop-detector.ts`）
 
-```
-CLI 启动
-  → 确定 skills/ 目录路径
-    → discoverSkillPackages()
-      → 扫描一级子目录（每个 = SkillPackage）
-        → 读取 SKILL.md，解析 front matter
-        → 导入 index.ts，获取 Skill[]
-        → 扫描 skills/ 子目录，动态加载子技能
-    → skillRegistry.registerPackage(pkg)
-    → 合并 contributed tools → ToolRegistry
-    → 合并 contributed toolboxes → 工具箱列表
-```
+**职责**：防止 Agent 陷入无限循环（v4.1 新增）。
 
-#### 创建自定义技能
+- 检测相同工具 + 相同参数的重复调用
+- 检测已知轮询模式但无状态变化
+- 检测交替的 ping-pong 模式
+- 渐进式：先警告、后拦截
 
-见 `skills/README.md`。
-
-### 4. 双层配置系统
-
-**文件**: `src/core/config.ts`
-
-```
-ModelConfig（模型层）
-├── baseUrl, model
-├── temperature, topP, maxTokens
-├── thinkingLevel, thinkingBudget
-└── contextWindow, stream, retryCount
-
-AgentConfig（Agent 层）
-├── maxTurns, toolTimeout
-├── contextReserveRatio, overflowStrategy
-├── toolSelectionStrategy
-├── compressMessages, allowParallelTools
-├── responseLanguage, responseFormat
-└── debug, logTokenUsage, logFile
-```
-
-**配置预设**:
-
-| 预设 | maxTurns | timeout | thinking |
-|------|----------|---------|----------|
-| `fast` | 3 | 15s | 禁用 |
-| `balanced`（默认） | 5 | 30s | 轻度 |
-| `deep` | 15 | 60s | 深度 |
-
-**合并优先级**（从低到高）:
-1. `getDefaultAgentConfig()` — 默认值
-2. `runAgent(options.agentConfig)` — 用户传入
-3. `plan.suggestedConfig` — 规划器推荐
-
-### 5. 工具注册表（ToolRegistry）
-
-**文件**: `src/core/registry.ts`
-
-管理所有工具的生命周期：
-
-- `register(name, tool)` — 注册工具
-- `unregister(name)` — 注销工具
-- `get(name)` — 查询工具
-- `getAll()` — 获取全部工具
-- `getSchemas()` — 提取 OpenAI schema
-- `getSchemasByToolboxes(ids)` — 按工具箱筛选 schema
-- `getByToolboxes(ids)` — 按工具箱筛选完整工具对象
-
-内部使用 `Map<string, RegisteredTool>` 存储。
-
-### 6. 安全设计
-
-**文件**: `src/security/sandbox.ts`
-
-#### 路径沙箱
-
-```
-resolveSandboxPath(inputPath, allowedDirs)
-  → path.resolve(inputPath) → 转为绝对路径
-  → 遍历 allowedDirs → 检查是否在允许范围内
-  → 通过 → 返回绝对路径 / 拒绝 → 抛出 Error
-```
-
-#### 工具权限分级
-
-| 权限 | 说明 | 示例 |
-|------|------|------|
-| `sandbox` | 只能在 allowedPaths 内操作 | read_file, write_file |
-| `allowlist` | 需要命令白名单验证 | exec_command |
-| `require-confirm` | 必须用户确认 | delete_file |
-
-#### 命令执行安全
-
-- 危险命令过滤（`rm -rf /`, `mkfs` 等）
-- 超时强制终止（SIGKILL）
-- 分别捕获 stdout/stderr
-
-### 7. 性能监控
-
-**文件**: `src/core/monitor.ts`
-
-自动记录每次工具调用的：
-- 调用次数
-- 总耗时 / 平均耗时
-- 成功 / 失败次数
-
-通过 `.stats` 命令查看报告。
-
-### 8. 输出管理
-
-**文件**: `src/core/output-manager.ts`
-
-解决 readline 与异步输出的冲突：
-
-```
-异步操作前 → beginOutput()
-  → pause readline
-  → clear current line
-  → output content
-异步操作后 → endOutput()
-  → redraw prompt
-  → resume readline
-```
-
-支持嵌套调用（计数器模式），避免重复清除。
-
-### 9. 增量日志
-
-**文件**: `src/core/logger.ts`
-
-将 LLM 输入/输出增量追加到指定文件：
-- 每行一个 JSON 对象
-- 支持 truncation 防止日志膨胀
-- 通过 `.log <路径>` 命令开启
+---
 
 ## 数据流
 
 ```
 用户输入
   ↓
-CLI (cli.ts)
-  ├── OutputManager.beginOutput()
+CLI/飞书入口
   ↓
-runAgent() (agent.ts)
-  ├── Phase 1: generatePlan() (planner.ts)
-  │     ├── 构建 messages [system + user]
-  │     ├── 调用 LLM → StructuredPlan
-  │     └── 合并配置 (config.ts)
+runAgent(userInput, options)
   ↓
-  ├── Phase 2: executePlan() (agent.ts)
-  │     ├── 筛选工具 (registry.ts)
-  │     ├── ReAct 循环
-  │     │     ├── LLM → 工具调用
-  │     │     ├── 查找工具 (registry.get())
-  │     │     ├── 执行工具 (tool.handler())
-  │     │     │     ├── 路径验证 (sandbox.ts)
-  │     │     │     └── 实际执行 (fs/spawn/fetch)
-  │     │     ├── 记录性能 (monitor.ts)
-  │     │     └── 结果追加到消息
-  │     └── 返回最终回复
-  ↓
-  ├── OutputManager.write(reply)
-  └── OutputManager.endOutput()
+┌─ Phase 1: Planning ──────────────────┐
+│  generatePlan(userInput, toolboxes)   │
+│  → StructuredPlan                     │
+│  → 合并 plan.suggestedConfig          │
+│  → 高风险操作需用户确认                │
+└──────────────┬────────────────────────┘
+               ↓
+┌─ Phase 2: Execution ─────────────────┐
+│  executePlan(plan, userInput, ...)    │
+│  → 筛选工具（按 toolbox 策略）         │
+│  → 初始化上下文管理器                  │
+│  → 注入三层记忆                       │
+│  → ReAct 循环:                        │
+│     while (turns > 0):                │
+│       LLM(messages, tools)            │
+│       if no tool_calls: return reply  │
+│       for each tool_call:             │
+│         循环检测                       │
+│         执行工具                       │
+│         结果追加到上下文                │
+│  → 保存会话记忆                       │
+└──────────────┬────────────────────────┘
+               ↓
+          最终回复
 ```
 
-## 扩展点
+---
 
-### 添加新工具
+## 版本历史
 
-1. 在 `src/tools/` 创建新文件
-2. 定义 schema + handler + permission
-3. 在 `cli.ts` 中注册到 registry
-
-### 添加新技能
-
-1. 在 `skills/` 创建新目录
-2. 编写 `SKILL.md` + `index.ts`
-3. （可选）添加 `tools.ts` 贡献新工具
-
-### 添加新工具箱
-
-1. 在 `src/toolboxes.ts` 添加定义
-2. 在工具的 `toolbox` 字段中引用
-
-## 依赖关系
-
-```
-cli.ts
-  ├── agent.ts ─── planner.ts ─── logger.ts
-  │     ├── registry.ts
-  │     ├── monitor.ts
-  │     ├── config.ts
-  │     └── sandbox.ts
-  ├── skill-registry.ts
-  ├── skill-loader.ts ─── types.ts
-  ├── output-manager.ts
-  └── toolboxes.ts
-```
-
-## 版本演进
-
-| 版本 | 核心特性 |
-|------|---------|
-| v1 | 基础 ReAct 循环 + 3 类工具 |
-| v2 | 注册表 + 监控器 + 沙箱 |
-| v3 | 两阶段架构 + 工具箱 + 配置系统 |
-| v4 | 技能系统 + 输出管理器 |
+| 版本 | 日期 | 主要变更 |
+|------|------|----------|
+| v4.8 | 2026-05-03 | 架构重构：类型拆分、executor 独立、目录分层 |
+| v4.7 | 2026-05-02 | 多会话系统、工作空间隔离 |
+| v4.6 | 2026-05-01 | 三层记忆、上下文管理、关键词索引 |
+| v4.5 | 2026-04-30 | 飞书长轮询、WebSocket 支持 |
+| v4.4 | 2026-04-29 | CLI 命令增强、OutputManager |
+| v4.3 | 2026-04-28 | 技能系统、ClawHub 集成 |
+| v4.2 | 2026-04-27 | 自我优化子系统 |
+| v4.1 | 2026-04-26 | 循环检测、模型预设 |
+| v4.0 | 2026-04-25 | 两阶段架构、技能系统 |

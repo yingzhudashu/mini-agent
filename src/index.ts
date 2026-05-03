@@ -50,8 +50,8 @@ export { generatePlan } from "./core/planner.js";
 export { DEFAULT_TOOLBOXES } from "./toolboxes.js";
 
 // ── 类型定义 ──
-// v3 新增类型：Toolbox, StructuredPlan, ModelConfig, AgentConfig, SuggestedConfig, 等
-export type * from "./core/types.js";
+// v4.8 重构：类型已拆分到 src/types/ 目录
+export type * from "./types/index.js";
 
 // ── 工具集 ──
 export { filesystemTools } from "./tools/filesystem.js";
