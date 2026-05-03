@@ -116,8 +116,13 @@ async function handleMessage(
         sessionKey,
         sessionRegistry: sessionCtx.registry,
         sessionWorkspace: sessionCtx.config.filesPath,
+        conversationHistory: sessionCtx.conversationHistory,
       },
     });
+
+    // v4.9.3: 更新对话历史
+    sessionCtx.conversationHistory.push({ role: "user", content });
+    sessionCtx.conversationHistory.push({ role: "assistant", content: result });
 
     return result;
   } catch (err) {
