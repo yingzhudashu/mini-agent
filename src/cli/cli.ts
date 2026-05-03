@@ -189,7 +189,15 @@ async function main() {
   const skillPrompts = skillRegistry.getSystemPrompts();
 
   // ── 显示欢迎信息 ──
-  console.log("🤖 Mini Agent v4.7 已启动");
+  const pkgVersion = (() => {
+    try {
+      const pkgPath = path.resolve(__dirname, "../../package.json");
+      return JSON.parse(fs.readFileSync(pkgPath, "utf8")).version;
+    } catch {
+      return "?.?.?";
+    }
+  })();
+  console.log(`🤖 Mini Agent v${pkgVersion} 已启动`);
   console.log(`📡 模型: ${MODEL} | 预设: ${activeProfile}`);
   console.log(`📂 工作空间: ${getDefaultWorkspace()}`);
   console.log(`🧰 工具箱: ${allToolboxes.map(t => t.name).join(", ")}`);
