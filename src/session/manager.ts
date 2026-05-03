@@ -83,6 +83,8 @@ export interface SessionContext {
   toolboxes: Toolbox[];
   /** 会话级技能 */
   skills: Skill[];
+  /** 对话历史（跨轮次保留，v4.9.3 新增） */
+  conversationHistory: Array<{ role: string; content: string }>;
 }
 
 // ============================================================================
@@ -194,6 +196,7 @@ export class SessionManager {
       registry,
       toolboxes: [],
       skills: [],
+      conversationHistory: [],
     };
 
     this.sessions.set(sessionId, ctx);

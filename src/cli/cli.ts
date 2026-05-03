@@ -571,6 +571,7 @@ async function main() {
           sessionKey: activeSessionId,
           sessionRegistry: sessionCtx.registry,
           sessionWorkspace: sessionCtx.config.filesPath,
+          conversationHistory: sessionCtx.conversationHistory,
         },
         systemPrompt: skillPrompts.length > 0 ? skillPrompts.join("\n\n") : undefined,
         onToolCall: (name, args, result) => {
@@ -587,6 +588,9 @@ async function main() {
         },
       });
       outputManager.write(`\n🦾 ${reply}`);
+      // v4.9.3: 更新对话历史
+      sessionCtx.conversationHistory.push({ role: "user", content: actualInput });
+      sessionCtx.conversationHistory.push({ role: "assistant", content: reply });
     } catch (err: any) {
       outputManager.write(`\n❌ 错误: ${err?.message ?? err}`);
     } finally {

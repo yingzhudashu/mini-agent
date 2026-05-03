@@ -149,4 +149,6 @@ export interface AgentConfig {
   sessionWorkspace?: string;
   /** 会话工具箱列表（v4.7 新增） */
   sessionToolboxes?: Toolbox[];
+  /** 对话历史（跨轮次保留，v4.9.3 新增） */
+  conversationHistory?: Array<{ role: string; content: string }>;
 }
