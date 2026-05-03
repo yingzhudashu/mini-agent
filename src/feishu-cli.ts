@@ -53,6 +53,14 @@ if (!instanceResult.success) {
 
 // 注册退出钩：进程退出时释放锁（兜底）
 process.on('exit', releaseInstance);
+
+// v4.6: 初始化关键词索引（Layer 3）
+import { loadIndex, saveIndex, pruneExpiredIndex } from './core/keyword-index.js';
+loadIndex();
+const pruned = pruneExpiredIndex(30);
+if (pruned > 0) console.log(`🧹 清理了 ${pruned} 条过期索引`);
+process.on('beforeExit', () => saveIndex());
+
 const appId = process.env.FEISHU_APP_ID;
 const appSecret = process.env.FEISHU_APP_SECRET;
 

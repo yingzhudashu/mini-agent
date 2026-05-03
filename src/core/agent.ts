@@ -68,6 +68,7 @@ import { DEFAULT_LOOP_DETECTION } from "./config.js";
 // v4.6: 上下文管理与记忆
 import { DefaultContextManager } from "./context-manager.js";
 import { memoryStore, extractFacts, generateTurnSummary } from "./memory-store.js";
+import { loadIndex, searchRelevantMemory, formatSearchResults, getIndexStats } from "./keyword-index.js";
 
 // ============================================================================
 // OpenAI 客户端
@@ -171,9 +172,22 @@ async function executePlan(
   // 构建 system prompt
   let systemPrompt = `你是一个有用的助手。${plan.summary}`;
 
-  // v4.6: 加载并注入会话记忆
+  // v4.6: 三层记忆注入
+  // Layer 2: 会话记忆（同聊天室的长期记忆）
+  // Layer 3: 语义检索（跨所有会话的相关记忆）
   if (agentConfig.sessionKey) {
     const memory = await memoryStore.load(agentConfig.sessionKey);
+
+    // Layer 3: 语义检索相关记忆
+    const relevantMemories = searchRelevantMemory(userInput, 8, 0);
+    const searchResults = formatSearchResults(relevantMemories);
+    if (searchResults) {
+      systemPrompt += `\n\n${searchResults}`;
+      if (agentConfig.debug) {
+        console.log(`🔍 Layer 3 语义检索: ${relevantMemories.length} 条相关记忆`);
+      }
+    }
+
     if (memory) {
       contextManager.init(systemPrompt, userInput);
       contextManager.injectMemory(memory);
@@ -198,6 +212,9 @@ async function executePlan(
     console.log(`📊 计划: ${plan.summary}`);
     console.log(`🔄 最大轮数: ${maxTurns} | 循环检测: ${loopConfig.enabled ? "启用" : "禁用"}`);
     console.log(`📦 上下文窗口: ${modelConfig.contextWindow} tokens | 压缩阈值: ${(agentConfig.contextCompressThreshold * 100).toFixed(0)}%`);
+    // v4.6: 三层记忆状态
+    const indexStats = getIndexStats();
+    console.log(`🧠 三层记忆: L1(上下文) | L2(会话文件) | L3(关键词索引 ${indexStats.totalKeywords} 词 / ${indexStats.totalReferences} 条引用)`);
   }
 
   // ── ReAct 循环 ──

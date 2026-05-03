@@ -19,6 +19,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { SessionMemory, MemoryStore as IMemoryStore, MemoryEntry } from "./types.js";
+import { indexEntry } from "./keyword-index.js";
 
 // ============================================================================
 // 路径配置
@@ -272,5 +273,8 @@ export const memoryStore: IMemoryStore = {
 
     memory.lastActive = new Date().toISOString();
     await this.save(memory);
+
+    // Layer 3: 索引到关键词倒排索引
+    indexEntry(sessionId, fullEntry);
   },
 };

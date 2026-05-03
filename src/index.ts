@@ -76,6 +76,9 @@ export { memoryStore, formatMemoryForPrompt, extractFacts, generateTurnSummary }
 // ── v4.6: 单实例管理 ──
 export { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "./core/instance-manager.js";
 
+// ── v4.6: Layer 3 语义检索 ──
+export { extractKeywords, loadIndex, saveIndex, searchRelevantMemory, formatSearchResults, getIndexStats, pruneExpiredIndex } from "./core/keyword-index.js";
+
 // ── 自我优化工具 (v4.2) ──
 export { selfOptTools } from "./tools/self-opt.js";
 export { inspectSelf } from "./core/self-opt/inspector.js";

@@ -102,6 +102,13 @@ for (const [name, tool] of Object.entries(selfOptTools)) registry.register(name,
 // ── 模型预设管理 ──
 let activeProfile = process.env.MODEL_PROFILE ?? "balanced";
 
+// v4.6: 初始化关键词索引（Layer 3）
+import { loadIndex, saveIndex, pruneExpiredIndex } from "./core/keyword-index.js";
+loadIndex();
+const pruned = pruneExpiredIndex(30);
+if (pruned > 0) console.log(`🧹 清理了 ${pruned} 条过期索引`);
+process.on("beforeExit", () => saveIndex());
+
 // ── 自动发现并加载技能包 ──
 async function loadSkills() {
   const skillsRoot = process.env.MINI_AGENT_SKILLS
