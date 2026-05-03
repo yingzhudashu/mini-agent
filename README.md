@@ -1,4 +1,4 @@
-# Mini Agent v4.5 🦾
+# Mini Agent v4.9 🦾
 
 > 基于 TypeScript 的最小化 LLM Agent，支持工具调用、两阶段规划、技能扩展、循环检测、自我优化与飞书集成。
 

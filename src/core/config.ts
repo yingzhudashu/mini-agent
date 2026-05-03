@@ -9,7 +9,7 @@
  * @module core/config
  */
 
-import type { ModelConfig, ModelProfile, AgentConfig, LoopDetectionConfig } from "./types.js";
+import type { ModelConfig, ModelProfile, AgentConfig, LoopDetectionConfig } from "../types/index.js";
 
 /**
  * 模型配置预设

@@ -21,9 +21,9 @@ import type {
   ChatCompletionMessageParam,
   ChatCompletionTool,
 } from "openai/resources/chat/completions";
-import type { ContextManager, ContextState } from "./types.js";
+import type { ContextManager, ContextState } from "../types/index.js";
 import { formatMemoryForPrompt } from "./memory-store.js";
-import type { SessionMemory } from "./types.js";
+import type { SessionMemory } from "../types/index.js";
 
 // ============================================================================
 // Token 估算

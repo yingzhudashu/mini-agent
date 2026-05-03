@@ -37,7 +37,7 @@ import type {
   Toolbox,
   ToolDefinition,
   AgentConfig,
-} from "./types.js";
+} from "../types/index.js";
 
 /**
  * 默认技能注册表实现

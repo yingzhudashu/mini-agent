@@ -20,7 +20,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ClawHubClient, ClawHubSearchResult, ClawHubSkillDetail } from "./types.js";
+import type { ClawHubClient, ClawHubSearchResult, ClawHubSkillDetail } from "../types/index.js";
 
 /** ClawHub API 基础 URL */
 const CLAWHUB_API = "https://clawhub.ai/api/v1";

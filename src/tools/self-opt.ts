@@ -22,7 +22,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { spawn } from "node:child_process";
-import type { ToolDefinition, ToolContext, ToolResult } from "../core/types.js";
+import type { ToolDefinition, ToolContext, ToolResult } from "../types/index.js";
 import type {
   InspectionReport,
   ResearchReport,

@@ -21,7 +21,7 @@
  * @module core/loop-detector
  */
 
-import type { LoopDetectionConfig, LoopDetectionResult, LoopLevel } from "./types.js";
+import type { LoopDetectionConfig, LoopDetectionResult, LoopLevel } from "../types/index.js";
 
 /**
  * 工具调用记录

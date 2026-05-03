@@ -28,7 +28,7 @@
  * @module core/planner
  */
 
-import type { StructuredPlan, Toolbox } from "./types.js";
+import type { StructuredPlan, Toolbox } from "../types/index.js";
 import OpenAI from "openai";
 import { appendLog, truncate } from "./logger.js";
 

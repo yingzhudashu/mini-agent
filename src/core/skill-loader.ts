@@ -32,7 +32,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Skill, SkillPackage } from "./types.js";
+import type { Skill, SkillPackage } from "../types/index.js";
 
 /**
  * 解析 SKILL.md 文件头部的 YAML front matter

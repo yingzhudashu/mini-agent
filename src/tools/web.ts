@@ -22,7 +22,7 @@
  * @module tools/web
  */
 
-import type { ToolDefinition, ToolContext, ToolResult } from "../core/types.js";
+import type { ToolDefinition, ToolContext, ToolResult } from "../types/index.js";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
 // ============================================================================

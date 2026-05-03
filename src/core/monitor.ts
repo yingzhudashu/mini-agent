@@ -17,7 +17,7 @@
  * @module core/monitor
  */
 
-import type { ToolMonitor, ToolStats } from "./types.js";
+import type { ToolMonitor, ToolStats } from "../types/index.js";
 
 /**
  * 默认工具性能监控器实现

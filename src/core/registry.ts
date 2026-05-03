@@ -34,7 +34,7 @@
  */
 
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import type { RegisteredTool, ToolDefinition, ToolRegistry } from "./types.js";
+import type { RegisteredTool, ToolDefinition, ToolRegistry } from "../types/index.js";
 
 /**
  * 默认工具注册表实现

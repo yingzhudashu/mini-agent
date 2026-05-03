@@ -22,7 +22,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { MemoryEntry, MemoryEntryInput } from "./types.js";
+import type { MemoryEntry, MemoryEntryInput } from "../types/index.js";
 
 // ============================================================================
 // 路径

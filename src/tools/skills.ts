@@ -15,7 +15,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createClawHubClient, searchLocalSkills } from "../core/clawhub-client.js";
-import type { ToolDefinition, ToolContext, ToolResult } from "../core/types.js";
+import type { ToolDefinition, ToolContext, ToolResult } from "../types/index.js";
 
 const clawhub = createClawHubClient();
 

@@ -25,7 +25,7 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
-import type { ToolDefinition, ToolContext, ToolResult } from "../core/types.js";
+import type { ToolDefinition, ToolContext, ToolResult } from "../types/index.js";
 import { resolveSandboxPath, getDefaultWorkspace } from "../security/sandbox.js";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 
