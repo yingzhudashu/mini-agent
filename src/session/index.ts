@@ -7,5 +7,6 @@
  * @module session
  */
 
-export { SessionManager, getSessionManager, SessionConfig, SessionContext } from "./manager.js";
+export { SessionManager, getSessionManager } from "./manager.js";
+export type { SessionConfig, SessionContext } from "./manager.js";
 export { WorkspaceManager, getWorkspaceManager } from "./workspace.js";
