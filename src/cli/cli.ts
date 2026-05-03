@@ -51,7 +51,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "readline";
 import { runAgent, MODEL, getSessionManager } from "../core/agent.js";
-import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "../core/instance-manager.js";
+import { tryAcquireInstance, forceAcquireInstance, releaseInstance, stopInstance } from "../core/instance-manager.js";
 import { DefaultToolRegistry } from "../core/registry.js";
 import { DefaultToolMonitor } from "../core/monitor.js";
 import { DefaultSkillRegistry } from "../core/skill-registry.js";
@@ -144,6 +144,17 @@ async function loadSkills() {
  * 两阶段模式：先规划（Phase 1）后执行（Phase 2）。
  */
 async function main() {
+  // ── 🔴 停止实例 ──
+  if (process.argv.includes("--stop")) {
+    const result = stopInstance();
+    if (result.success) {
+      console.log("✅ Mini Agent 已停止");
+    } else {
+      console.log(`ℹ️ ${result.reason}`);
+    }
+    process.exit(0);
+  }
+
   // ── 🔴 单实例检查 ──
   const forceMode = process.argv.includes("--force");
   const instanceResult = forceMode ? forceAcquireInstance() : tryAcquireInstance();
@@ -265,6 +276,18 @@ async function main() {
     const input = await ask("\n> ");
     if (input === null || input.toLowerCase() === "quit" || input.toLowerCase() === "exit") break;
     if (!input.trim()) continue;
+
+    // 内置命令：停止实例
+    if (input === ".stop") {
+      const result = stopInstance();
+      if (result.success) {
+        console.log("✅ 实例已停止");
+        process.exit(0);
+      } else {
+        console.log(`ℹ️ ${result.reason}`);
+      }
+      continue;
+    }
 
     // 内置命令：显示统计
     if (input === ".stats") {

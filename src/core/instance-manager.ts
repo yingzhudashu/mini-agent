@@ -158,6 +158,57 @@ export function releaseInstance(): void {
 }
 
 /**
+ * 停止正在运行的实例
+ * @returns { success: true } | { success: false; reason: string }
+ */
+export function stopInstance(): { success: true } | { success: false; reason: string } {
+  ensureStateDir();
+
+  if (!fs.existsSync(PID_FILE)) {
+    return { success: false, reason: "没有运行中的实例（PID 文件不存在）" };
+  }
+
+  try {
+    const raw = fs.readFileSync(PID_FILE, "utf-8").trim();
+    const existingPid = parseInt(raw, 10);
+
+    if (isNaN(existingPid) || !isProcessRunning(existingPid)) {
+      // 进程已死，清理残留
+      fs.unlinkSync(PID_FILE);
+      return { success: false, reason: `PID=${existingPid} 的进程已不存在，已清理残留文件` };
+    }
+
+    // 终止进程
+    console.log(`🛑 正在停止 Mini Agent (PID=${existingPid})...`);
+    try {
+      if (process.platform === "win32") {
+        const { execSync } = require("child_process");
+        execSync(`taskkill /PID ${existingPid} /F`, {
+          encoding: "utf-8",
+          timeout: 10000,
+        });
+      } else {
+        process.kill(existingPid, "SIGTERM");
+        // 等待退出
+        for (let i = 0; i < 50; i++) {
+          if (!isProcessRunning(existingPid)) break;
+          require("child_process").execSync("sleep 0.1", { timeout: 1000 });
+        }
+      }
+    } catch (killErr) {
+      return { success: false, reason: `无法终止 PID=${existingPid} 的进程: ${killErr}` };
+    }
+
+    // 清理 PID 文件
+    try { fs.unlinkSync(PID_FILE); } catch { /* ignore */ }
+    console.log(`✅ Mini Agent 已停止`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: String(err) };
+  }
+}
+
+/**
  * 确保状态目录存在
  */
 function ensureStateDir(): void {
