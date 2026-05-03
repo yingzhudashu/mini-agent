@@ -389,6 +389,12 @@ export interface AgentConfig {
   modelOverrides?: Partial<ModelConfig>;
   /** 会话记忆（v4.6 新增，可选） */
   sessionKey?: string;
+  /** 会话级工具注册表（v4.7 新增） */
+  sessionRegistry?: ToolRegistry;
+  /** 会话工作空间路径（v4.7 新增） */
+  sessionWorkspace?: string;
+  /** 会话工具箱列表（v4.7 新增） */
+  sessionToolboxes?: Toolbox[];
 }
 
 // ============================================================================

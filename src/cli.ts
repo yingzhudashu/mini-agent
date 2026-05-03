@@ -50,7 +50,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "readline";
-import { runAgent, MODEL } from "./core/agent.js";
+import { runAgent, MODEL, getSessionManager } from "./core/agent.js";
 import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "./core/instance-manager.js";
 import { DefaultToolRegistry } from "./core/registry.js";
 import { DefaultToolMonitor } from "./core/monitor.js";
@@ -174,22 +174,31 @@ async function main() {
   // ── 合并技能贡献的工具箱 ──
   const skillToolboxes = skillRegistry.getAllToolboxes();
   const allToolboxes = [...DEFAULT_TOOLBOXES, ...skillToolboxes];
+  const loadedSkills = skillRegistry.getAll();
+
+  // v4.7: 初始化 SessionManager
+  const sessionManager = getSessionManager(registry, allToolboxes, loadedSkills);
+  // 创建默认会话（交互式 CLI 使用）
+  const defaultSession = sessionManager.getOrCreate("cli-interactive", {
+    description: "CLI 交互会话",
+  });
+  let activeSessionId = "cli-interactive";
+  console.log("🧩 多会话管理已初始化");
 
   // ── 构建系统提示 ──
   const skillPrompts = skillRegistry.getSystemPrompts();
 
   // ── 显示欢迎信息 ──
-  console.log("🤖 Mini Agent v4.5 已启动");
+  console.log("🤖 Mini Agent v4.7 已启动");
   console.log(`📡 模型: ${MODEL} | 预设: ${activeProfile}`);
   console.log(`📂 工作空间: ${getDefaultWorkspace()}`);
   console.log(`🧰 工具箱: ${allToolboxes.map(t => t.name).join(", ")}`);
   console.log(`🔧 工具: ${registry.list().join(", ")}`);
-  const loadedSkills = skillRegistry.getAll();
   if (loadedSkills.length > 0) {
     console.log(`🎯 技能: ${loadedSkills.map(s => s.name).join(", ")}`);
   }
   console.log(
-    '💡 输入问题，或 "quit" 退出 | 命令: .stats .skills .profile .skill .plan .log .optimize',
+    '💡 输入问题，或 "quit" 退出 | 命令: .stats .skills .sessions .profile .skill .plan .log .optimize .promote',
   );
   console.log("─".repeat(60));
 
@@ -275,6 +284,97 @@ async function main() {
         for (const s of skills) lines.push(`  - ${s.name} (${s.id}): ${s.description}`);
         outputManager.write(lines.join("\n"));
       }
+      continue;
+    }
+
+    // v4.7: 会话管理命令
+    if (input === ".sessions") {
+      const sessions = sessionManager.list();
+      const mainTools = sessionManager.getMainTools();
+      const lines = [
+        "\n🧩 多会话管理",
+        `  活跃会话: ${sessions.length}`,
+        `  主空间工具: ${mainTools.length} 个`,
+        `  当前会话: ${activeSessionId}`,
+      ];
+      if (sessions.length > 0) {
+        lines.push("\n  会话列表:");
+        for (const s of sessions) {
+          const marker = s.sessionId === activeSessionId ? " ← 当前" : "";
+          lines.push(`  - ${s.sessionId}${marker}`);
+          lines.push(`    工具: ${s.toolCount} | 技能: ${s.skillCount} | 目录: ${s.filesPath}`);
+        }
+      }
+      outputManager.write(lines.join("\n"));
+      continue;
+    }
+
+    if (input.startsWith(".session ")) {
+      const parts = input.split(/\s+/);
+      const subCmd = parts[1];
+
+      if (subCmd === "new" && parts.length >= 3) {
+        const newId = parts[2];
+        const ctx = sessionManager.getOrCreate(newId, {
+          description: parts.slice(3).join(" ") || "CLI 手动创建",
+        });
+        activeSessionId = newId;
+        outputManager.write(`🆕 会话已创建并切换: ${newId}`);
+        outputManager.write(`   工作空间: ${ctx.config.filesPath}`);
+        outputManager.write(`   工具数: ${ctx.registry.list().length}`);
+      } else if (subCmd === "new") {
+        // 自动生成 ID
+        const newId = `cli-${Date.now()}`;
+        const ctx = sessionManager.getOrCreate(newId, { description: "CLI 自动会话" });
+        activeSessionId = newId;
+        outputManager.write(`🆕 会话已创建: ${newId}`);
+        outputManager.write(`   工作空间: ${ctx.config.filesPath}`);
+      } else if (subCmd === "switch" && parts.length >= 3) {
+        const targetId = parts[2];
+        const ctx = sessionManager.getOrCreate(targetId);
+        if (ctx) {
+          activeSessionId = targetId;
+          outputManager.write(`🔄 已切换到会话: ${targetId}`);
+        } else {
+          outputManager.write(`❌ 会话不存在: ${targetId}`);
+        }
+      } else if (subCmd === "destroy" && parts.length >= 3) {
+        const targetId = parts[2];
+        if (targetId === activeSessionId) {
+          outputManager.write("⚠️ 无法销毁当前活跃会话，请先 .session switch 到其他会话");
+        } else {
+          const ok = sessionManager.destroy(targetId);
+          outputManager.write(ok ? `🗑️ 会话已销毁: ${targetId}` : `⚠️ 会话不存在: ${targetId}`);
+        }
+      } else {
+        outputManager.write("❌ 未知 .session 命令。用法: .session new [id] [desc] | .session switch <id> | .session destroy <id>");
+      }
+      continue;
+    }
+
+    // v4.7: 升维命令
+    if (input.startsWith(".promote ")) {
+      const parts = input.split(/\s+/);
+      const target = parts[1];
+
+      if (target === "all") {
+        const results = sessionManager.promoteAllTools(activeSessionId);
+        const lines = ["\n🚀 批量升维结果:"];
+        for (const r of results) {
+          lines.push(`  ${r.message}`);
+        }
+        outputManager.write(lines.join("\n"));
+      } else {
+        const result = sessionManager.promoteTool(activeSessionId, target);
+        outputManager.write(result.message);
+      }
+      continue;
+    }
+
+    if (input.startsWith(".demote ")) {
+      const toolName = input.split(/\s+/)[1];
+      const result = sessionManager.demoteTool(toolName);
+      outputManager.write(result.message);
       continue;
     }
 
@@ -446,6 +546,9 @@ async function main() {
     const skipPlanning = input.startsWith(".plan ");
     const actualInput = skipPlanning ? input.slice(6) : input;
 
+    // v4.7: 获取当前会话上下文
+    const sessionCtx = sessionManager.getOrCreate(activeSessionId);
+
     try {
       outputManager.beginOutput();
       const reply = await runAgent(actualInput, {
@@ -453,7 +556,14 @@ async function main() {
         monitor,
         toolboxes: allToolboxes,
         skipPlanning,
-        agentConfig: { debug: true, logFile, outputManager },
+        agentConfig: {
+          debug: true,
+          logFile,
+          outputManager,
+          sessionKey: activeSessionId,
+          sessionRegistry: sessionCtx.registry,
+          sessionWorkspace: sessionCtx.config.filesPath,
+        },
         systemPrompt: skillPrompts.length > 0 ? skillPrompts.join("\n\n") : undefined,
         onToolCall: (name, args, result) => {
           const short = result.length > 100 ? result.slice(0, 100) + "..." : result;

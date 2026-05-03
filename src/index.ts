@@ -79,6 +79,13 @@ export { tryAcquireInstance, forceAcquireInstance, releaseInstance } from "./cor
 // ── v4.6: Layer 3 语义检索 ──
 export { extractKeywords, loadIndex, saveIndex, searchRelevantMemory, formatSearchResults, getIndexStats, pruneExpiredIndex } from "./core/keyword-index.js";
 
+// ── v4.6: 多会话管理 ──
+export { SessionManager, getSessionManager } from "./core/session-manager.js";
+export type { SessionContext, SessionConfig } from "./core/session-manager.js";
+
+// ── v4.7: 工作空间管理 ──
+export { WorkspaceManager, getWorkspaceManager } from "./core/workspace-manager.js";
+
 // ── 自我优化工具 (v4.2) ──
 export { selfOptTools } from "./tools/self-opt.js";
 export { inspectSelf } from "./core/self-opt/inspector.js";

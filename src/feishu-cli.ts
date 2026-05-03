@@ -24,7 +24,7 @@
  */
 
 import 'dotenv/config';
-import { runAgent, DefaultToolRegistry, DefaultToolMonitor } from './index.js';
+import { runAgent, DefaultToolRegistry, DefaultToolMonitor, getSessionManager } from './index.js';
 import { filesystemTools } from './tools/filesystem.js';
 import { execTools } from './tools/exec.js';
 import { webTools } from './tools/web.js';
@@ -89,6 +89,10 @@ for (const [name, tool] of Object.entries(webTools)) registry.register(name, too
 for (const [name, tool] of Object.entries(skillsTools)) registry.register(name, tool);
 for (const [name, tool] of Object.entries(selfOptTools)) registry.register(name, tool);
 
+// v4.7: 初始化 SessionManager
+const sessionManager = getSessionManager(registry);
+console.log('🧩 多会话管理已初始化');
+
 // 消息处理函数
 async function handleMessage(
   content: string,
@@ -98,14 +102,20 @@ async function handleMessage(
   try {
     console.log(`[Agent] 处理消息: ${content.slice(0, 50)}...`);
 
-    // v4.6: 使用 chatId + senderId 作为会话 key，实现跨会话记忆
+    // v4.7: 获取或创建会话上下文
     const sessionKey = chatId || senderId || 'default';
+    const sessionCtx = sessionManager.getOrCreate(sessionKey, {
+      chatId,
+      senderId,
+    });
 
     const result = await runAgent(content, {
       registry,
       monitor,
       agentConfig: {
         sessionKey,
+        sessionRegistry: sessionCtx.registry,
+        sessionWorkspace: sessionCtx.config.filesPath,
       },
     });
 

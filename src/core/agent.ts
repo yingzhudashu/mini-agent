@@ -69,6 +69,7 @@ import { DEFAULT_LOOP_DETECTION } from "./config.js";
 import { DefaultContextManager } from "./context-manager.js";
 import { memoryStore, extractFacts, generateTurnSummary } from "./memory-store.js";
 import { loadIndex, searchRelevantMemory, formatSearchResults, getIndexStats } from "./keyword-index.js";
+import { getSessionManager } from "./session-manager.js";
 
 // ============================================================================
 // OpenAI 客户端
@@ -146,14 +147,18 @@ async function executePlan(
   onToolCall?: (name: string, args: string, result: string) => void,
 ): Promise<string> {
   // 根据策略筛选工具
+  // v4.7: 优先使用会话级注册表
+  const effectiveRegistry = agentConfig.sessionRegistry || registry;
   const tools = agentConfig.toolSelectionStrategy === "all"
-    ? registry.getSchemas()
-    : registry.getSchemasByToolboxes(plan.requiredToolboxes);
+    ? effectiveRegistry.getSchemas()
+    : effectiveRegistry.getSchemasByToolboxes(plan.requiredToolboxes);
 
   // 初始化执行上下文
+  // v4.7: 使用会话级工作空间
+  const sessionWorkspace = agentConfig.sessionWorkspace;
   const ctx: ToolContext = {
-    cwd: getDefaultWorkspace(),
-    allowedPaths: [getDefaultWorkspace()],
+    cwd: sessionWorkspace || getDefaultWorkspace(),
+    allowedPaths: [sessionWorkspace || getDefaultWorkspace()],
     permission: "allowlist",
   };
 
@@ -569,3 +574,6 @@ export async function runPipeline(
 
   return { steps: results, finalContent: pipelineContent.trim(), success: true };
 }
+
+// v4.7: 导出 SessionManager
+export { getSessionManager } from "./session-manager.js";
