@@ -1,6 +1,6 @@
 {
   "name": "mini-agent",
-  "version": "4.9.0",
+  "version": "4.9.3",
   "description": "A minimal LLM agent with two-phase planning, skill system, self-optimization, and Feishu integration",
   "type": "module",
   "main": "dist/index.js",
