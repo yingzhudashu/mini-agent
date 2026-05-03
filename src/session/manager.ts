@@ -153,7 +153,9 @@ export class SessionManager {
     sessionId: string,
     options: { chatId?: string; senderId?: string; description?: string },
   ): SessionContext {
-    const workspacePath = path.join(WORKSPACES_DIR, sessionId);
+    // v4.9.3: 将非法路径字符替换为安全字符（Windows 不允许 : * ? " < > |）
+    const safeId = sessionId.replace(/[<>:"/\\|?*]/g, "_");
+    const workspacePath = path.join(WORKSPACES_DIR, safeId);
     const filesPath = path.join(workspacePath, "files");
     const skillsPath = path.join(workspacePath, "skills");
 
