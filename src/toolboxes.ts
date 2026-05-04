@@ -9,7 +9,7 @@
  * @module toolboxes
  */
 
-import type { Toolbox } from "./core/types.js";
+import type { Toolbox } from "./types/index.js";
 
 /**
  * 默认工具箱列表

@@ -23,16 +23,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { MemoryEntry, MemoryEntryInput } from "../types/index.js";
+import { MEMORY_DIR, ensureDir } from "../utils/fs.js";
 
 // ============================================================================
 // 路径
 // ============================================================================
 
-const STATE_DIR = path.join(
-  process.env.MINI_AGENT_STATE || process.cwd(),
-  ".mini-agent-state",
-  "memory",
-);
+const STATE_DIR = MEMORY_DIR;
 const INDEX_FILE = path.join(STATE_DIR, "keyword-index.json");
 
 // ============================================================================
@@ -62,6 +59,18 @@ const STOP_WORDS = new Set([
 
 /**
  * 提取关键词（简化版中文分词 + 英文词元化）
+ *
+ * 分词策略：
+ * - 英文：按空格和标点分词，去除停用词，过滤单字符
+ * - 中文：提取 2-gram 和 3-gram 字符组合
+ * - 混合：同时应用两种策略
+ *
+ * @param text - 要提取关键词的文本
+ * @returns 去重后的关键词数组
+ *
+ * @example
+ *   const keywords = extractKeywords('我喜欢吃苹果 and AI is cool');
+ *   // → ['喜欢', '欢吃', '吃苹', '苹果', 'ai', 'cool', ...]
  */
 export function extractKeywords(text: string): string[] {
   const keywords = new Set<string>();
@@ -140,6 +149,12 @@ let isLoaded = false;
 
 /**
  * 从磁盘加载索引
+ *
+ * 读取 keyword-index.json 到内存索引。如果文件不存在或损坏，
+ * 则初始化为空索引。自动标记为已加载。
+ *
+ * @example
+ *   loadIndex(); // 在应用启动时调用一次
  */
 export function loadIndex(): void {
   try {
@@ -166,10 +181,16 @@ export function loadIndex(): void {
 
 /**
  * 保存索引到磁盘
+ *
+ * 将内存索引写入 keyword-index.json。如果写入失败，静默忽略。
+ * 通常在应用退出时（beforeExit 事件）调用。
+ *
+ * @example
+ *   process.on('beforeExit', () => saveIndex());
  */
 export function saveIndex(): void {
   try {
-    ensureDir();
+    ensureDir(STATE_DIR);
     const disk: DiskIndex = {
       version: 1,
       updatedAt: new Date().toISOString(),
@@ -184,14 +205,7 @@ export function saveIndex(): void {
   }
 }
 
-/**
- * 确保目录存在
- */
-function ensureDir(): void {
-  if (!fs.existsSync(STATE_DIR)) {
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-  }
-}
+
 
 // ============================================================================
 // 索引操作

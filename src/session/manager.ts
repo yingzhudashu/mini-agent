@@ -16,11 +16,12 @@
  *   │   └── keyword-index.json
  *   └── instance.pid
  *
- * @module core/session-manager
+ * @module session/manager
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureDir } from "../utils/fs.js";
 import type {
   ToolDefinition,
   ToolRegistry,
@@ -148,7 +149,17 @@ export class SessionManager {
     return this.create(sessionId, options);
   }
 
-  /** 创建新会话 */
+  /**
+   * 创建新会话
+   *
+   * - 清理 sessionId 中的非法字符（Windows 不允许 : * ? " < > |）
+   * - 创建独立的工作空间（files/ + skills/）
+   * - 克隆主空间的核心工具（无 toolbox 的工具）
+   *
+   * @param sessionId - 会话唯一标识
+   * @param options - 可选参数（chatId、senderId、description）
+   * @returns 新创建的会话上下文
+   */
   private create(
     sessionId: string,
     options: { chatId?: string; senderId?: string; description?: string },
@@ -159,8 +170,8 @@ export class SessionManager {
     const filesPath = path.join(workspacePath, "files");
     const skillsPath = path.join(workspacePath, "skills");
 
-    if (!fs.existsSync(filesPath)) fs.mkdirSync(filesPath, { recursive: true });
-    if (!fs.existsSync(skillsPath)) fs.mkdirSync(skillsPath, { recursive: true });
+    ensureDir(filesPath);
+    ensureDir(skillsPath);
 
     const config: SessionConfig = {
       sessionId,
@@ -208,6 +219,10 @@ export class SessionManager {
 
   /**
    * 销毁会话
+   *
+   * @param sessionId - 要销毁的会话 ID
+   * @param keepFiles - 是否保留工作空间文件（默认 true）
+   * @returns 成功返回 true，会话不存在返回 false
    */
   destroy(sessionId: string, keepFiles = true): boolean {
     const ctx = this.sessions.get(sessionId);
@@ -229,7 +244,11 @@ export class SessionManager {
     return true;
   }
 
-  /** 列出所有活跃会话 */
+  /**
+   * 列出所有活跃会话
+   *
+   * @returns 会话信息数组，包含 ID、描述、工具数等
+   */
   list(): Array<{
     sessionId: string;
     description: string;
@@ -268,7 +287,12 @@ export class SessionManager {
   // 工具执行上下文
   // -----------------------------------------------------------------------
 
-  /** 获取会话的工具执行上下文（cwd = 会话文件目录） */
+  /**
+   * 获取会话的工具执行上下文（cwd = 会话文件目录）
+   *
+   * @param sessionId - 会话 ID
+   * @returns 工具执行上下文，包含 cwd、allowedPaths、permission
+   */
   toolContext(sessionId: string): ToolContext {
     const ctx = this.sessions.get(sessionId);
     if (!ctx) {
@@ -290,7 +314,14 @@ export class SessionManager {
   // 会话级工具管理
   // -----------------------------------------------------------------------
 
-  /** 在会话中注册工具 */
+  /**
+   * 在会话中注册工具
+   *
+   * @param sessionId - 目标会话 ID
+   * @param name - 工具名称
+   * @param tool - 工具定义
+   * @returns 成功返回 true，会话不存在返回 false
+   */
   registerTool(sessionId: string, name: string, tool: ToolDefinition): boolean {
     const ctx = this.sessions.get(sessionId);
     if (!ctx) return false;
@@ -302,7 +333,13 @@ export class SessionManager {
     }
   }
 
-  /** 从会话注销工具 */
+  /**
+   * 从会话注销工具
+   *
+   * @param sessionId - 目标会话 ID
+   * @param name - 工具名称
+   * @returns 成功返回 true，会话不存在或工具不存在返回 false
+   */
   unregisterTool(sessionId: string, name: string): boolean {
     const ctx = this.sessions.get(sessionId);
     if (!ctx) return false;
@@ -341,7 +378,12 @@ export class SessionManager {
     }
   }
 
-  /** 批量升维：会话所有工具 */
+  /**
+   * 批量升维：将当前会话的所有工具提升到主空间
+   *
+   * @param sessionId - 源会话 ID
+   * @returns 每个工具的升维结果
+   */
   promoteAllTools(sessionId: string): Array<{ name: string; success: boolean; message: string }> {
     const ctx = this.sessions.get(sessionId);
     if (!ctx) return [];
@@ -356,7 +398,12 @@ export class SessionManager {
   // 降维：主空间移除
   // -----------------------------------------------------------------------
 
-  /** 从主空间注销工具（所有会话不再看到） */
+  /**
+   * 从主空间注销工具（所有会话不再看到）
+   *
+   * @param toolName - 要移除的工具名称
+   * @returns 操作结果
+   */
   demoteTool(toolName: string): { success: boolean; message: string } {
     try {
       this.mainRegistry.unregister(toolName);
@@ -370,18 +417,34 @@ export class SessionManager {
   // 主空间查询
   // -----------------------------------------------------------------------
 
+  /**
+   * 获取主空间所有工具名称
+   * @returns 工具名称数组
+   */
   getMainTools(): string[] {
     return this.mainRegistry.list();
   }
 
+  /**
+   * 获取主空间所有技能
+   * @returns 技能数组（副本）
+   */
   getMainSkills(): Skill[] {
     return [...this.mainSkills];
   }
 
+  /**
+   * 获取主空间所有工具箱
+   * @returns 工具箱数组（副本）
+   */
   getMainToolboxes(): Toolbox[] {
     return [...this.mainToolboxes];
   }
 
+  /**
+   * 获取主空间工具注册表
+   * @returns 主空间的 ToolRegistry 实例
+   */
   getMainRegistry(): ToolRegistry {
     return this.mainRegistry;
   }
@@ -391,9 +454,7 @@ export class SessionManager {
   // -----------------------------------------------------------------------
 
   private ensureWorkspacesDir(): void {
-    if (!fs.existsSync(WORKSPACES_DIR)) {
-      fs.mkdirSync(WORKSPACES_DIR, { recursive: true });
-    }
+    ensureDir(WORKSPACES_DIR);
   }
 
   private saveConfig(config: SessionConfig): void {

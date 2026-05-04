@@ -1,24 +1,22 @@
 /**
- * @file feishu-cli.ts — 飞书 CLI 入口
+ * @file feishu-cli.ts — 飞书独立入口
  * @description
- *   启动飞书 WebSocket 长轮询连接，将收到的消息路由到 mini-agent 处理。
+ *   启动飞书 WebSocket 长轮询服务，将收到的消息路由到 mini-agent 处理。
  *
  *   与 Webhook 模式的区别：
  *   - Webhook：需要公网 IP / ngrok，飞书主动推送到你的服务器
- *   - 长轮询（默认）：SDK 通过 WebSocket 连接飞书服务器，无需公网 IP
- *     这就是 OpenClaw 的飞书通道工作方式
+ *   - 长轮询（本模式）：SDK 通过 WebSocket 连接飞书服务器，无需公网 IP
  *
- *   使用方式：
+ *   使用步骤：
  *   1. 在飞书开放平台创建企业自建应用
  *   2. 获取 App ID 和 App Secret
  *   3. 配置事件订阅 → 添加事件 im.message.receive_v1
- *      （注意：不需要配置请求地址，长轮询模式不需要）
- *   4. 确保应用有权限：im:message, im:message:send_as_bot
- *   5. 运行: npm run feishu
+ *   4. 确保应用权限：im:message, im:message:send_as_bot
+ *   5. 设置环境变量后运行: npm run feishu
  *
  *   环境变量：
- *   - FEISHU_APP_ID: 飞书 App ID (必填)
- *   - FEISHU_APP_SECRET: 飞书 App Secret (必填)
+ *   - FEISHU_APP_ID (必填): 飞书 App ID
+ *   - FEISHU_APP_SECRET (必填): 飞书 App Secret
  *
  * @module feishu-cli
  */
@@ -32,7 +30,7 @@ import { skillsTools } from './tools/skills.js';
 import { selfOptTools } from './tools/self-opt.js';
 import { startFeishuPollServer } from './feishu/poll-server.js';
 import { tryAcquireInstance, forceAcquireInstance, releaseInstance } from './core/instance-manager.js';
-import type { FeishuConfig } from './feishu/types.js';
+import type { FeishuConfig } from './types/index.js';
 import { createFeishuHandler } from './feishu/agent-handler.js';
 
 // 读取飞书配置

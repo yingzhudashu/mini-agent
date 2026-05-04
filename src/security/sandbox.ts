@@ -24,6 +24,9 @@
 
 import path from "node:path";
 
+// Re-export 以保持向后兼容
+export { getDefaultWorkspace } from "../utils/fs.js";
+
 /**
  * 解析并验证路径是否在允许的目录范围内
  *
@@ -98,22 +101,4 @@ export function isPathAllowed(inputPath: string, allowedDirs: string[]): boolean
   } catch {
     return false;
   }
-}
-
-/**
- * 获取工作空间根目录
- *
- * 优先级：
- * 1. 环境变量 MINI_AGENT_WORKSPACE（用户显式指定）
- * 2. 当前工作目录 process.cwd()（默认行为）
- *
- * 环境变量方式适用于：
- * - 部署场景：工作空间与运行目录不同
- * - 测试场景：指定临时目录作为工作空间
- * - 多实例场景：不同实例有不同的工作空间
- *
- * @returns 工作空间根目录的绝对路径
- */
-export function getDefaultWorkspace(): string {
-  return process.env.MINI_AGENT_WORKSPACE ?? process.cwd();
 }

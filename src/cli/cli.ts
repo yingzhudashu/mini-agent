@@ -72,7 +72,7 @@ import { generateProposals, formatProposals } from "../core/self-opt/proposal-en
 import { runProposalTests, formatTestResults, executeOptimization } from "../core/self-opt/self-test-runner.js";
 import { autoOptimize, formatAutoOptimizeResult } from "../core/self-opt/auto-optimizer.js";
 import { startFeishuPollServer } from "../feishu/poll-server.js";
-import type { FeishuConfig } from "../feishu/types.js";
+import type { FeishuConfig } from "../types/index.js";
 import { createFeishuHandler } from "../feishu/agent-handler.js";
 
 /** ESM 下手动获取 __dirname */

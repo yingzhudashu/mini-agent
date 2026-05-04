@@ -1,37 +1,20 @@
 /**
  * @file index.ts — 类型定义统一导出（Barrel File）
  * @description
- *   作为类型模块的公共入口，将所有类型定义统一导出。
+ *   类型模块的公共入口，将所有类型定义统一导出。
  *
- *   使用方式：
- *   ```typescript
- *   import type {
- *     ToolDefinition,
- *     ToolRegistry,
- *     AgentConfig,
- *     StructuredPlan,
- *     Skill,
- *   } from "../types/index.js";
- *   ```
- *
- * 领域划分：
- * - tool: 工具/工具箱/注册表
- * - config: 双层配置体系
- * - loop: 循环检测
- * - memory: 跨会话记忆
- * - context: 上下文管理
- * - planning: 规划系统
- * - pipeline: 线性管线
- * - stats: 性能监控
- * - skill: 技能系统
- * - clawhub: 技能市场
- * - session: 会话管理
- * - agent: Agent 运行结果
+ *   领域划分（6 个文件）：
+ *   - tool: 工具/工具箱/注册表 + 上下文管理
+ *   - config: 双层配置体系
+ *   - memory: 记忆存储 + 会话管理
+ *   - skill: 技能系统 + ClawHub 技能市场
+ *   - agent: Agent 运行结果 + 统计 + 循环检测 + 管线
+ *   - planning: 规划系统
  *
  * @module types
  */
 
-// 工具系统
+// 工具系统 + 上下文管理
 export type {
   ToolPermission,
   Toolbox,
@@ -41,6 +24,9 @@ export type {
   ToolDefinition,
   RegisteredTool,
   ToolRegistry,
+  TokenEstimate,
+  ContextState,
+  ContextManager,
 } from "./tool.js";
 
 // 配置系统
@@ -51,27 +37,41 @@ export type {
   AgentConfig,
 } from "./config.js";
 
-// 循环检测
-export type {
-  LoopDetectionConfig,
-  LoopLevel,
-  LoopDetectionResult,
-} from "./loop.js";
-
-// 跨会话记忆
+// 记忆 + 会话管理
 export type {
   MemoryEntry,
   MemoryEntryInput,
   SessionMemory,
   MemoryStore,
+  SessionOptions,
+  Session,
+  SessionManager,
 } from "./memory.js";
 
-// 上下文管理
+// 技能系统 + ClawHub
 export type {
-  TokenEstimate,
-  ContextState,
-  ContextManager,
-} from "./context.js";
+  SkillMetadata,
+  SkillEntry,
+  Skill,
+  SkillPackage,
+  SkillRegistry,
+  ClawHubSearchResult,
+  ClawHubSkillDetail,
+  ClawHubClient,
+} from "./skill.js";
+
+// Agent 运行结果 + 统计 + 循环检测 + 管线
+export type {
+  AgentRunResult,
+  AgentRunOptions,
+  ToolStats,
+  ToolMonitor,
+  LoopDetectionConfig,
+  LoopLevel,
+  LoopDetectionResult,
+  PipelineStep,
+  PipelineResult,
+} from "./agent.js";
 
 // 规划系统
 export type {
@@ -81,43 +81,10 @@ export type {
   StructuredPlan,
 } from "./planning.js";
 
-// 线性管线
+// 飞书集成
 export type {
-  PipelineStep,
-  PipelineResult,
-} from "./pipeline.js";
-
-// 性能监控
-export type {
-  ToolStats,
-  ToolMonitor,
-} from "./stats.js";
-
-// 技能系统
-export type {
-  SkillMetadata,
-  SkillEntry,
-  Skill,
-  SkillPackage,
-  SkillRegistry,
-} from "./skill.js";
-
-// 技能市场
-export type {
-  ClawHubSearchResult,
-  ClawHubSkillDetail,
-  ClawHubClient,
-} from "./clawhub.js";
-
-// 会话管理
-export type {
-  SessionOptions,
-  Session,
-  SessionManager,
-} from "./session.js";
-
-// Agent 运行结果
-export type {
-  AgentRunResult,
-  AgentRunOptions,
-} from "./agent.js";
+  FeishuMessageEvent,
+  FeishuConfig,
+  FeishuMessagePayload,
+  AgentMessageResult,
+} from "./feishu.js";

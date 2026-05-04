@@ -1,21 +1,17 @@
 /**
- * @file tool.ts — 工具相关类型定义
+ * @file tool.ts — 工具系统与上下文管理类型
  * @description
- *   Mini Agent 工具系统的核心类型，涵盖：
+ *   Mini Agent 的核心类型，涵盖：
  *   - 工具定义（ToolDefinition）与注册表（ToolRegistry）
  *   - 工具执行上下文（ToolContext）与结果（ToolResult）
  *   - 权限级别（ToolPermission）
  *   - 工具箱（Toolbox）：粗粒度能力分组
- *
- * 设计原则：
- * - 接口尽量小且明确，避免过度抽象
- * - 使用 `readonly` 标记不可变字段
- * - 枚举用联合类型而非 `enum`（更好的 tree-shaking）
+ *   - 上下文管理（v4.6）：Token 估算、上下文压缩
  *
  * @module types/tool
  */
 
-import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ChatCompletionTool, ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 // ============================================================================
 // 权限与工具箱
@@ -31,9 +27,6 @@ export type ToolPermission = "sandbox" | "allowlist" | "require-confirm";
 
 /**
  * 工具箱：粗粒度的能力分组
- *
- * Phase 1 规划阶段：LLM 根据工具箱描述决定需要哪些能力
- * Phase 2 执行阶段：只发送相关工具箱的工具给 LLM，节省 token
  */
 export interface Toolbox {
   /** 工具箱唯一标识 */
@@ -52,8 +45,6 @@ export interface Toolbox {
 
 /**
  * 工具执行上下文
- *
- * 传递到每个工具的 handler 中，提供执行环境信息。
  */
 export interface ToolContext {
   /** 当前工作目录 */
@@ -80,8 +71,6 @@ export interface ToolResult {
 
 /**
  * 工具处理器函数签名
- *
- * 接收工具调用参数和执行上下文，返回执行结果。
  */
 export type ToolHandler = (
   args: Record<string, unknown>,
@@ -94,9 +83,6 @@ export type ToolHandler = (
 
 /**
  * 工具定义：包含 schema、处理器、权限和帮助信息
- *
- * 每个工具通过 `toolbox` 字段可选绑定到一个工具箱 ID。
- * 未绑定 toolbox 的工具始终可用（视为核心能力）。
  */
 export interface ToolDefinition {
   /** OpenAI tool_call schema */
@@ -121,11 +107,6 @@ export interface RegisteredTool extends ToolDefinition {
 
 /**
  * 工具注册表接口
- *
- * 管理所有工具的生命周期：注册、注销、查询、按工具箱筛选。
- *
- * 内部使用 Map<string, RegisteredTool> 存储，
- * 保证 O(1) 的 get/set/delete 操作。
  */
 export interface ToolRegistry {
   /** 注册一个工具 */
@@ -144,4 +125,54 @@ export interface ToolRegistry {
   getSchemasByToolboxes(ids: string[]): ChatCompletionTool[];
   /** 按工具箱筛选，返回完整工具对象 */
   getByToolboxes(ids: string[]): Map<string, RegisteredTool>;
+}
+
+// ============================================================================
+// 上下文管理（v4.6 新增）
+// ============================================================================
+
+import type { SessionMemory } from "./memory.js";
+
+/**
+ * 消息的 token 估算结果
+ */
+export interface TokenEstimate {
+  /** 估算的 token 数 */
+  tokens: number;
+  /** 原始字符长度 */
+  charLength: number;
+}
+
+/**
+ * 上下文状态：跟踪当前消息列表的 token 使用
+ */
+export interface ContextState {
+  /** 当前消息列表 */
+  messages: ChatCompletionMessageParam[];
+  /** 当前估算的总 token 数 */
+  totalTokens: number;
+  /** 是否已被压缩过 */
+  compressed: boolean;
+}
+
+/**
+ * 上下文管理器接口
+ */
+export interface ContextManager {
+  /** 获取当前上下文状态 */
+  getState(): ContextState;
+  /** 初始化消息（system + user） */
+  init(systemPrompt: string, userInput: string): void;
+  /** 追加消息并检查是否需要压缩 */
+  append(msg: ChatCompletionMessageParam): void;
+  /** 检查是否需要压缩 */
+  needsCompression(): boolean;
+  /** 执行压缩（保留首尾，中间摘要） */
+  compress(): void;
+  /** 注入记忆摘要到 system prompt */
+  injectMemory(memory: SessionMemory | null): void;
+  /** 获取当前 token 使用报告 */
+  getTokenReport(): string;
+  /** 获取当前消息列表 */
+  getMessages(): ChatCompletionMessageParam[];
 }

@@ -1,26 +1,34 @@
 /**
- * @file server.ts — 飞书 Webhook 服务器
+ * @file server.ts — 飞书 Webhook HTTP 服务器
  * @description
  *   接收飞书开放平台的事件推送，处理 URL 验证和消息事件。
+ *
+ *   与长轮询模式的区别：
+ *   - Webhook 模式（本文件）：需要公网可达的 URL，飞书主动推送事件
+ *   - 长轮询模式（poll-server.ts）：主动连接飞书服务器，无需公网 IP
  *
  *   工作流程：
  *   1. 飞书开放平台 → POST /webhook → 验证 challenge
  *   2. 收到消息事件 → 解析 → 路由到 handler
- *   3. handler 调用 Agent → 获取回复 → 发送回飞书
+ *   3. handler 调用 Agent → 获取回复 → 通过飞书 API 发送回复
  *
  * @module feishu/server
  */
 
 import http from 'node:http';
 import * as lark from '@larksuiteoapi/node-sdk';
-import type { FeishuConfig } from './types.js';
+import type { FeishuConfig } from '../types/index.js';
 
 /**
  * 创建飞书 Webhook HTTP 服务器
  *
- * @param config 飞书配置
- * @param messageHandler 消息处理函数 (消息文本) => (回复文本)
- * @returns HTTP Server 实例
+ * @param config - 飞书应用配置（App ID、Secret、端口等）
+ * @param messageHandler - 消息处理函数，接收 (消息文本, 聊天ID, 发送者ID)，返回回复文本
+ * @returns HTTP Server 实例，调用 .listen(port) 后开始监听
+ *
+ * @example
+ *   const server = createFeishuServer(config, async (text) => `收到: ${text}`);
+ *   server.listen(3000);
  */
 export function createFeishuServer(
   config: FeishuConfig,
@@ -77,7 +85,15 @@ export function createFeishuServer(
 }
 
 /**
- * 处理飞书事件
+ * 处理飞书事件（内部函数）
+ *
+ * 解析事件数据，验证事件类型，调用消息处理器生成回复，
+ * 然后通过飞书 API 发送回复。
+ *
+ * @param data - 飞书事件原始数据（包含 event 字段）
+ * @param client - 飞书 API 客户端（用于发送回复）
+ * @param messageHandler - 消息处理函数，签名: (content, chatId, senderId) => Promise<reply>
+ * @returns 无返回值，通过飞书 API 发送回复（side effect）
  */
 async function handleEvent(
   data: Record<string, unknown>,
@@ -147,11 +163,15 @@ async function handleEvent(
 }
 
 /**
- * 启动飞书 Webhook 服务器
+ * 创建并启动飞书 Webhook 服务器
  *
- * @param config 飞书配置
- * @param messageHandler 消息处理函数
- * @returns 服务器实例
+ * @param config - 飞书应用配置
+ * @param messageHandler - 消息处理函数
+ * @returns 已启动的 HTTP Server 实例
+ *
+ * @example
+ *   const server = startFeishuServer(config, handleFeishuMessage);
+ *   // 服务器已在指定端口上监听
  */
 export function startFeishuServer(
   config: FeishuConfig,

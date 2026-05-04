@@ -27,6 +27,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureDir } from "../../utils/fs.js";
 import type {
   InspectionReport,
   ResearchReport,
@@ -184,9 +185,7 @@ async function applyChanges(
       if (f.action === "create" || f.action === "modify") {
         // 创建父目录（如果不存在）
         const dir = path.dirname(full);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
+        ensureDir(dir);
         // 写入文件内容
         if (f.content) {
           fs.writeFileSync(full, f.content, "utf-8");

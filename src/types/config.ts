@@ -13,7 +13,7 @@
  */
 
 import type { Toolbox, ToolRegistry } from "./tool.js";
-import type { LoopDetectionConfig } from "./loop.js";
+import type { LoopDetectionConfig } from "./agent.js";
 
 // ============================================================================
 // Model Profile — 模型预设

@@ -20,27 +20,16 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { SessionMemory, MemoryStore as IMemoryStore, MemoryEntry } from "../types/index.js";
 import { indexEntry } from "./keyword-index.js";
+import { MEMORY_DIR, ensureDir } from "../utils/fs.js";
 
 // ============================================================================
 // 路径配置
 // ============================================================================
 
-const STATE_DIR = path.join(
-  process.env.MINI_AGENT_STATE || process.cwd(),
-  ".mini-agent-state",
-  "memory",
-);
-
-function ensureStateDir() {
-  if (!fs.existsSync(STATE_DIR)) {
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-  }
-}
-
 function memoryFilePath(sessionId: string): string {
   // 文件名安全处理
   const safe = sessionId.replace(/[^a-zA-Z0-9_-]/g, "_");
-  return path.join(STATE_DIR, `${safe}.json`);
+  return path.join(MEMORY_DIR, `${safe}.json`);
 }
 
 // ============================================================================
@@ -66,6 +55,16 @@ function createEmptyMemory(sessionId: string): SessionMemory {
 
 /**
  * 将记忆格式化为可注入 system prompt 的文本
+ *
+ * 从 SessionMemory 提取关键事实、累计摘要和最近对话条目，
+ * 格式化为 Markdown 文本，可直接拼接到 system prompt 中。
+ *
+ * @param memory - 会话记忆对象（null 时返回空字符串）
+ * @returns 格式化后的记忆文本（或空字符串）
+ *
+ * @example
+ *   const memoryText = formatMemoryForPrompt(sessionMemory);
+ *   systemPrompt += `\n\n${memoryText}`;
  */
 export function formatMemoryForPrompt(memory: SessionMemory | null): string {
   if (!memory) return "";
@@ -103,7 +102,16 @@ export function formatMemoryForPrompt(memory: SessionMemory | null): string {
 
 /**
  * 从对话中提取关键事实（简单启发式）
- * 识别 "记住"、"以后"、"偏好"、"默认" 等关键词的句子
+ *
+ * 识别包含记忆性关键词（"记住"、"以后"、"偏好"、"默认"、"喜欢"等）的句子，
+ * 提取其内容作为关键事实存储。
+ *
+ * @param text - 要分析的对话文本
+ * @returns 提取的关键事实数组
+ *
+ * @example
+ *   const facts = extractFacts('记住我喜欢用中文回复，以后默认用 Markdown 格式');
+ *   // → ['我喜欢用中文回复', '默认用 Markdown 格式']
  */
 export function extractFacts(text: string): string[] {
   const facts: string[] = [];
@@ -133,11 +141,26 @@ export function extractFacts(text: string): string[] {
 
 /**
  * 生成单轮对话摘要（简单版，不调用 LLM）
- * 从工具调用和用户消息中提取关键信息
+ *
+ * 从用户消息、工具调用和最终回复中提取关键信息，
+ * 拼接为简短的中文摘要字符串。
+ *
+ * @param userMessage - 用户原始消息
+ * @param toolCalls - 本轮使用的工具调用列表
+ * @param finalReply - LLM 的最终回复
+ * @returns 摘要字符串
+ *
+ * @example
+ *   const summary = generateTurnSummary(
+ *     '帮我创建 README.md',
+ *     [{ name: 'write_file', args: '{"path":"README.md"}' }],
+ *     '已创建 README.md 文件'
+ *   );
+ *   // → "用户帮我创建 README.md，使用了 write_file，回复: 已创建 README.md 文件"
  */
 export function generateTurnSummary(
   userMessage: string,
-  toolCalls: Array<{ name: string; args: string; result?: string }>,
+  toolCalls: { name: string; args?: unknown }[],
   finalReply: string,
 ): string {
   const parts: string[] = [];
@@ -178,7 +201,7 @@ export const memoryStore: IMemoryStore = {
     }
 
     try {
-      ensureStateDir();
+      ensureDir(MEMORY_DIR);
       const filePath = memoryFilePath(sessionId);
       if (!fs.existsSync(filePath)) return null;
 
@@ -196,7 +219,7 @@ export const memoryStore: IMemoryStore = {
    */
   async save(memory: SessionMemory): Promise<void> {
     try {
-      ensureStateDir();
+      ensureDir(MEMORY_DIR);
       const filePath = memoryFilePath(memory.sessionId);
       fs.writeFileSync(filePath, JSON.stringify(memory, null, 2), "utf-8");
       memoryCache.set(memory.sessionId, memory);

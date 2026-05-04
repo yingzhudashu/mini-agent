@@ -27,20 +27,45 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { ensureDir } from "../utils/fs.js";
 
-/** 追加一条日志到文件 */
+/**
+ * 追加一条日志到文件
+ *
+ * 每行追加一个 JSON 对象，包含时间戳。如果父目录不存在则自动创建。
+ *
+ * @param logFile - 日志文件的完整路径
+ * @param entry - 要写入的日志条目（自动附加 ts 时间戳）
+ *
+ * @example
+ *   appendLog('./logs/agent.jsonl', {
+ *     phase: 'exec',
+ *     turn: 1,
+ *     res: { content: 'Hello!' }
+ *   });
+ */
 export function appendLog(logFile: string, entry: Record<string, unknown>): void {
   // 确保父目录存在
   const dir = path.dirname(logFile);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  ensureDir(dir);
 
   const line = JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n";
   fs.appendFileSync(logFile, line, "utf8");
 }
 
-/** 安全截取大对象，避免日志文件膨胀 */
+/**
+ * 安全截取大对象，避免日志文件膨胀
+ *
+ * 将任意对象转为字符串，超过 maxLen 时截断并附加提示。
+ *
+ * @param obj - 要格式化的对象
+ * @param maxLen - 最大字符数（默认 2000）
+ * @returns 格式化后的字符串（可能被截断）
+ *
+ * @example
+ *   truncate({ large: 'data'.repeat(1000) }, 50);
+ *   // → "{\n  \"large\": \"datadatadat...\n... [truncated, total N chars]"
+ */
 export function truncate(obj: unknown, maxLen = 2000): string {
   const s = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
   return s.length > maxLen ? s.slice(0, maxLen) + `\n... [truncated, total ${s.length} chars]` : s;

@@ -47,7 +47,7 @@ import { getDefaultAgentConfig, mergeAgentConfig } from "./config.js";
 // ReAct 循环执行器（v4.8 拆分）
 import { executePlan, client, MODEL } from "./executor.js";
 // SessionManager（v4.7）
-export { getSessionManager } from "./session-manager.js";
+export { getSessionManager } from "../session/index.js";
 
 // ============================================================================
 // 重新导出 executor 的共享资源
@@ -165,6 +165,11 @@ export async function runAgent(
 
 /**
  * 创建默认计划（用于直接执行模式）
+ *
+ * 当 skipPlanning=true 或未提供工具箱时，生成一个最小化的默认计划。
+ * 不经过 LLM 规划，直接执行 ReAct 循环。
+ *
+ * @returns 默认的结构化执行计划
  */
 function createDefaultPlan(): StructuredPlan {
   return {

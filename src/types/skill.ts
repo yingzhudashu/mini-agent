@@ -1,14 +1,11 @@
 /**
- * @file skill.ts — 技能系统类型
+ * @file skill.ts — 技能系统与 ClawHub 类型
  * @description
- *   技能系统是 Mini Agent 的模块化扩展机制。
- *
- *   架构层次：
+ *   技能系统是 Mini Agent 的模块化扩展机制，包含：
  *   - Skill: 单个可复用的能力单元
  *   - SkillPackage: 一组相关技能的集合
- *   - SkillRegistry: 技能注册表接口
- *   - SkillMetadata: 技能元数据（gating 信息）
- *   - SkillEntry: 技能配置覆盖
+ *   - SkillRegistry: 技能注册表
+ *   - ClawHub: 技能市场（搜索/下载）
  *
  * @module types/skill
  */
@@ -21,9 +18,7 @@ import type { AgentConfig } from "./config.js";
 // ============================================================================
 
 /**
- * 技能元数据（gating 信息，参考 OpenClaw 的 metadata.openclaw）
- *
- * 用于判断技能是否可以在当前环境下加载。
+ * 技能元数据（gating 信息）
  */
 export interface SkillMetadata {
   /** 必需的系统二进制文件 */
@@ -32,29 +27,29 @@ export interface SkillMetadata {
   env?: string[];
   /** 必需的 AgentConfig 字段 */
   config?: string[];
-  /** 主环境变量名（用于 apiKey 注入） */
+  /** 主环境变量名 */
   primaryEnv?: string;
   /** 适用操作系统 */
   os?: string[];
-  /** 始终加载（跳过 gating） */
+  /** 始终加载 */
   always?: boolean;
-  /** 技能唯一键（用于 skills.entries 配置） */
+  /** 技能唯一键 */
   skillKey?: string;
-  /** 用户可调用（作为 slash 命令） */
+  /** 用户可调用 */
   userInvocable?: boolean;
   /** 排除模型调用 */
   disableModelInvocation?: boolean;
 }
 
 /**
- * 技能配置覆盖（参考 OpenClaw 的 skills.entries）
+ * 技能配置覆盖
  */
 export interface SkillEntry {
   /** 是否启用 */
   enabled?: boolean;
   /** 注入的环境变量 */
   env?: Record<string, string>;
-  /** API Key（支持明文或 SecretRef） */
+  /** API Key */
   apiKey?: string | { source: string; provider: string; id: string };
   /** 自定义配置 */
   config?: Record<string, unknown>;
@@ -66,17 +61,6 @@ export interface SkillEntry {
 
 /**
  * 技能：一个独立的、可复用的能力单元
- *
- * 每个技能可以贡献：
- * 1. 工具定义（tools）→ 注册到 ToolRegistry
- * 2. 工具箱（toolboxes）→ 用于 Phase 1 规划筛选
- * 3. 系统提示词增强（systemPrompt）→ 追加到 system prompt
- * 4. SKILL.md → 人类可读的技能说明文档
- * 5. 元数据（metadata）→ gating 和安装信息
- *
- * 与 Toolbox 的区别：
- * - Toolbox 是纯描述性的（id + name + description + keywords）
- * - Skill 是功能性的：包含实际的工具实现 + 文档 + 系统提示
  */
 export interface Skill {
   /** 技能唯一标识 */
@@ -107,19 +91,9 @@ export interface Skill {
 
 /**
  * 技能包：一组相关技能的集合
- *
- * 目录结构：
- * ```
- * skills/<package-name>/
- *   ├── SKILL.md          # 技能包总览文档
- *   ├── index.ts          # 技能包入口（导出 Skill[]）
- *   └── <skill-id>/
- *       ├── SKILL.md      # 单个技能文档
- *       └── tools.ts      # 工具定义
- * ```
  */
 export interface SkillPackage {
-  /** 技能包唯一标识（通常等于目录名） */
+  /** 技能包唯一标识 */
   id: string;
   /** 技能包名称 */
   name: string;
@@ -139,8 +113,6 @@ export interface SkillPackage {
 
 /**
  * 技能注册表接口
- *
- * 管理技能包的生命周期：注册、注销、查询、过滤。
  */
 export interface SkillRegistry {
   /** 注册一个技能 */
@@ -161,8 +133,72 @@ export interface SkillRegistry {
   getAllTools(): Record<string, ToolDefinition>;
   /** 获取所有技能的 system prompt 增强 */
   getSystemPrompts(): string[];
-  /** 根据配置过滤后的可用技能（考虑 gating） */
+  /** 根据配置过滤后的可用技能 */
   getEligibleSkills(config?: AgentConfig): Skill[];
   /** 获取技能配置覆盖 */
   getSkillEntry(id: string): SkillEntry | undefined;
+}
+
+// ============================================================================
+// ClawHub 技能市场
+// ============================================================================
+
+/**
+ * ClawHub 技能搜索结果
+ */
+export interface ClawHubSearchResult {
+  /** 技能 slug */
+  slug: string;
+  /** 技能名称 */
+  name: string;
+  /** 技能描述 */
+  description: string;
+  /** 当前版本 */
+  version: string;
+  /** 标签 */
+  tags: string[];
+  /** 下载次数 */
+  downloads: number;
+  /** 星标数 */
+  stars: number;
+  /** 作者 */
+  author: string;
+}
+
+/**
+ * ClawHub 技能详情
+ */
+export interface ClawHubSkillDetail {
+  /** 技能 slug */
+  slug: string;
+  /** 技能名称 */
+  name: string;
+  /** 技能描述 */
+  description: string;
+  /** 当前版本 */
+  version: string;
+  /** 标签 */
+  tags: string[];
+  /** SKILL.md 内容 */
+  skillMd: string;
+  /** 技能文件列表 */
+  files: { path: string; content: string }[];
+}
+
+/**
+ * ClawHub 客户端接口
+ */
+export interface ClawHubClient {
+  /** 搜索技能 */
+  search(query: string, limit?: number): Promise<ClawHubSearchResult[]>;
+  /** 获取技能详情 */
+  getDetail(slug: string): Promise<ClawHubSkillDetail>;
+  /** 下载技能包 */
+  download(
+    slug: string,
+    version?: string,
+  ): Promise<{
+    path: string;
+    files: { path: string; content: string }[];
+  }>;
 }

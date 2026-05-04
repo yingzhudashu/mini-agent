@@ -18,11 +18,8 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { STATE_DIR, ensureStateDir } from "../utils/fs.js";
 
-const STATE_DIR = path.join(
-  process.env.MINI_AGENT_STATE || process.cwd(),
-  ".mini-agent-state",
-);
 const PID_FILE = path.join(STATE_DIR, "instance.pid");
 
 // ============================================================================
@@ -208,11 +205,4 @@ export function stopInstance(): { success: true } | { success: false; reason: st
   }
 }
 
-/**
- * 确保状态目录存在
- */
-function ensureStateDir(): void {
-  if (!fs.existsSync(STATE_DIR)) {
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-  }
-}
+

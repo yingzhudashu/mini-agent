@@ -3,12 +3,16 @@
  * @description
  *   使用飞书 SDK 的 WSClient 长轮询模式接收事件推送。
  *
- *   与 OpenClaw 对齐的核心机制：
- *   - 单客户端单例（防止多实例导致事件路由不确定）
- *   - 内存去重 + 磁盘持久化去重（防止重复处理）
- *   - 聊天室级别顺序队列（防止并发导致上下文混乱）
- *   - 消息防抖（合并同一发送者短时内的连续消息）
- *   - 优雅关闭（SIGINT/SIGTERM）
+ *   核心机制（对齐 OpenClaw）：
+ *   - 单客户端单例：防止多实例导致事件路由不确定
+ *   - 内存+磁盘双重去重：防止重复处理同一消息
+ *   - 聊天室顺序队列：防止并发导致上下文混乱
+ *   - 消息防抖：合并同一发送者短时内的连续消息
+ *   - 优雅关闭：SIGINT/SIGTERM 信号处理
+ *
+ *   适用场景：
+ *   - 无需公网 IP，适合家庭网络或内网部署
+ *   - 飞书开放平台的企业自建应用
  *
  * @module feishu/poll-server
  */
@@ -16,8 +20,9 @@
 import * as lark from '@larksuiteoapi/node-sdk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { FeishuConfig } from './types.js';
+import type { FeishuConfig } from '../types/index.js';
 import { releaseInstance } from '../core/instance-manager.js';
+import { ensureDir } from '../utils/fs.js';
 
 // ============================================================================
 // 🔴 P0：单客户端单例（对齐 OpenClaw 的 wsClients Map）
@@ -40,20 +45,15 @@ const processingClaims = new Map<string, number>();
 /** 磁盘去重路径 */
 const stateDir = path.join(
   process.env.MINI_AGENT_STATE || process.cwd(),
+  '.mini-agent-state',
   'feishu',
   'dedup'
 );
 const dedupFilePath = path.join(stateDir, 'processed.json');
 
-function ensureStateDir() {
-  if (!fs.existsSync(stateDir)) {
-    fs.mkdirSync(stateDir, { recursive: true });
-  }
-}
-
 function loadDiskDedup(): Map<string, number> {
   try {
-    ensureStateDir();
+    ensureDir(stateDir);
     if (fs.existsSync(dedupFilePath)) {
       const raw = fs.readFileSync(dedupFilePath, 'utf-8');
       const data = JSON.parse(raw) as Record<string, number>;
@@ -67,7 +67,7 @@ function loadDiskDedup(): Map<string, number> {
 
 function saveDiskDedup(dedup: Map<string, number>) {
   try {
-    ensureStateDir();
+    ensureDir(stateDir);
     const data = Object.fromEntries(dedup);
     fs.writeFileSync(dedupFilePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch {
@@ -260,8 +260,18 @@ function gracefulShutdown(wsClient: lark.WSClient) {
 /**
  * 启动飞书 WebSocket 长轮询模式
  *
- * @param config 飞书配置
- * @param messageHandler 消息处理函数
+ * 该函数会建立与飞书服务器的 WebSocket 连接，
+ * 持续接收事件推送并分发给消息处理器。
+ *
+ * @param config - 飞书应用配置（App ID、Secret 等）
+ * @param messageHandler - 消息处理函数，签名: (消息文本, 聊天ID, 发送者ID) => Promise<回复文本>
+ * @returns Promise，连接建立后 resolve；连接异常时 reject
+ *
+ * @example
+ *   await startFeishuPollServer(
+ *     { appId: 'xxx', appSecret: 'yyy', port: 0 },
+ *     async (text, chatId, senderId) => `echo: ${text}`
+ *   );
  */
 export async function startFeishuPollServer(
   config: FeishuConfig,

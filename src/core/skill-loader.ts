@@ -216,8 +216,17 @@ async function loadSubSkills(skillsDir: string): Promise<Skill[]> {
 /**
  * 发现并加载 skills/ 目录下的所有技能包
  *
- * @param skillsRoot - skills 目录根路径
- * @returns 加载成功的 SkillPackage 列表
+ * 扫描指定目录下的一级子目录，每个子目录视为一个 SkillPackage。
+ * 调用 loadSkillPackage 逐个加载，过滤加载失败的。
+ *
+ * @param skillsRoot - 技能目录的根路径
+ * @returns 成功加载的 SkillPackage 数组
+ *
+ * @example
+ *   const packages = await discoverSkillPackages('./skills');
+ *   for (const pkg of packages) {
+ *     skillRegistry.registerPackage(pkg);
+ *   }
  */
 export async function discoverSkillPackages(skillsRoot: string): Promise<SkillPackage[]> {
   if (!fs.existsSync(skillsRoot)) return [];

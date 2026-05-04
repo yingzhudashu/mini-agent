@@ -64,6 +64,10 @@ export const MODEL_PROFILES: Record<string, ModelProfile> = {
 
 /**
  * 从环境变量读取整数值
+ *
+ * @param key - 环境变量名
+ * @param fallback - 默认值（环境变量未设置时返回）
+ * @returns 解析后的整数或 fallback
  */
 function envInt(key: string, fallback: number): number {
   const v = process.env[key];
@@ -76,6 +80,10 @@ function envInt(key: string, fallback: number): number {
 
 /**
  * 从环境变量读取布尔值
+ *
+ * @param key - 环境变量名
+ * @param fallback - 默认值（环境变量未设置时返回）
+ * @returns 布尔值（"true"/"1"/"yes" → true，其余 false）
  */
 function envBool(key: string, fallback: boolean): boolean {
   const v = process.env[key];
@@ -94,6 +102,10 @@ function envBool(key: string, fallback: boolean): boolean {
  * - LOOP_HISTORY_SIZE: 历史窗口大小
  * - LOOP_WARNING_THRESHOLD: 警告阈值
  * - LOOP_CRITICAL_THRESHOLD: 严重阈值
+ *
+ * @example
+ *   // 在 .env 中禁用循环检测
+ *   // LOOP_DETECTION_ENABLED=false
  */
 export const DEFAULT_LOOP_DETECTION: LoopDetectionConfig = {
   enabled: envBool("LOOP_DETECTION_ENABLED", true),
@@ -109,6 +121,15 @@ export const DEFAULT_LOOP_DETECTION: LoopDetectionConfig = {
 
 /**
  * 获取默认 ModelConfig
+ *
+ * 根据环境变量和预设构建完整的模型配置。
+ * 读取的环境变量：OPENAI_BASE_URL, OPENAI_MODEL, MODEL_PROFILE, AGENT_CONTEXT_WINDOW
+ *
+ * @returns 默认的模型配置对象
+ *
+ * @example
+ *   const modelConfig = getDefaultModelConfig();
+ *   console.log(modelConfig.model); // 默认 "gpt-4o-mini"
  */
 export function getDefaultModelConfig(): ModelConfig {
   const profile = process.env.MODEL_PROFILE ?? "balanced";
@@ -144,6 +165,12 @@ export function getDefaultModelConfig(): ModelConfig {
  * - AGENT_CONTEXT_COMPRESS_THRESHOLD: 压缩触发阈值（默认 0.6，即 60% 窗口）
  * - AGENT_DEBUG: 调试模式
  * - AGENT_LOG_TOKEN_USAGE: 记录 token 使用量
+ *
+ * @returns 默认的 Agent 配置对象
+ *
+ * @example
+ *   const agentConfig = getDefaultAgentConfig();
+ *   console.log(agentConfig.maxTurns); // 默认 20
  */
 export function getDefaultAgentConfig(): AgentConfig {
   return {
@@ -168,6 +195,18 @@ export function getDefaultAgentConfig(): AgentConfig {
 
 /**
  * 应用模型预设到 ModelConfig
+ *
+ * 将指定预设的参数（temperature、topP、maxTokens、thinking 等）合并到现有配置中。
+ * 未知预设名称会自动回退到 balanced。
+ *
+ * @param config - 当前模型配置
+ * @param profileName - 预设名称（creative/balanced/precise/code/fast）
+ * @returns 应用预设后的新配置
+ *
+ * @example
+ *   const config = getDefaultModelConfig();
+ *   const precise = applyModelProfile(config, "precise");
+ *   console.log(precise.temperature); // 0.3
  */
 export function applyModelProfile(config: ModelConfig, profileName: string): ModelConfig {
   const profile = MODEL_PROFILES[profileName];
@@ -189,6 +228,18 @@ export function applyModelProfile(config: ModelConfig, profileName: string): Mod
 
 /**
  * 合并 Agent 配置
+ *
+ * 将覆盖配置深合并到基础配置中。loopDetection 会逐字段合并，
+ * 确保未指定的子字段保留原值。
+ *
+ * @param base - 基础配置（通常为 getDefaultAgentConfig() 的结果）
+ * @param overrides - 要覆盖的字段（可选）
+ * @returns 合并后的完整配置
+ *
+ * @example
+ *   const base = getDefaultAgentConfig();
+ *   const merged = mergeAgentConfig(base, { maxTurns: 30, debug: true });
+ *   console.log(merged.maxTurns); // 30
  */
 export function mergeAgentConfig(base: AgentConfig, overrides: Partial<AgentConfig>): AgentConfig {
   const merged = { ...base, ...overrides };

@@ -5,9 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsx src/cli.ts",
+    "start": "tsx src/cli/cli.ts",
     "feishu": "tsx src/feishu-cli.ts",
-    "stop": "tsx src/cli.ts --stop",
+    "stop": "tsx src/cli/cli.ts --stop",
     "test": "tsx tests/test.ts",
     "build": "tsc",
     "lint": "tsc --noEmit",

@@ -10,16 +10,38 @@ import { runAgent } from "../core/agent.js";
 import { getSessionManager } from "../session/manager.js";
 import type { ToolRegistry, ToolMonitor, Toolbox, Skill } from "../types/index.js";
 
+/**
+ * 飞书消息处理器的依赖项
+ *
+ * @description 创建飞书消息处理器时需要传入的核心模块引用。
+ */
 export interface FeishuHandlerDeps {
+  /** 工具注册表，用于提供 Agent 可调用的工具 */
   registry: ToolRegistry;
+  /** 性能监控器，记录工具调用统计 */
   monitor: ToolMonitor;
+  /** 可用工具箱列表（可选，空则跳过规划） */
   toolboxes?: Toolbox[];
+  /** 已加载的技能列表（可选） */
   skills?: Skill[];
+  /** 技能贡献的 system prompt 增强（可选） */
   skillPrompts?: string[];
 }
 
 /**
- * 飞书消息处理器（内嵌模式 + 独立模式共用）
+ * 创建飞书消息处理器（内嵌模式 + 独立模式共用）
+ *
+ * @param deps - 处理器所需的依赖项
+ * @returns 消息处理函数 (content, chatId, senderId) => Promise<string>
+ *
+ * @example
+ *   const handler = createFeishuHandler({
+ *     registry,
+ *     monitor,
+ *     toolboxes: DEFAULT_TOOLBOXES,
+ *   });
+ *
+ *   const reply = await handler('你好', 'chat_123', 'user_456');
  */
 export function createFeishuHandler(deps: FeishuHandlerDeps) {
   const sessionManager = getSessionManager(deps.registry);

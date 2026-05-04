@@ -21,6 +21,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureDir } from "../../utils/fs.js";
 import type {
   OptimizationProposal,
   OptimizationResult,
@@ -180,7 +181,7 @@ async function applyFileChanges(
       const full = path.isAbsolute(f.path) ? f.path : path.join(cwd, f.path);
       if (f.action === "create" || f.action === "modify") {
         const dir = path.dirname(full);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        ensureDir(dir);
         if (f.content) fs.writeFileSync(full, f.content, "utf-8");
       } else if (f.action === "delete" && fs.existsSync(full)) {
         fs.unlinkSync(full);

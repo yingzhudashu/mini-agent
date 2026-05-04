@@ -322,6 +322,15 @@ export async function executePlan(
 
 /**
  * 保存会话记忆（抽取为独立函数，避免重复代码）
+ *
+ * 在一轮对话结束时调用，提取关键事实、生成摘要，
+ * 并添加到记忆存储和关键词索引中。
+ *
+ * @param sessionKey - 会话标识（如 "feishu:chat_123"）
+ * @param userInput - 用户输入
+ * @param finalReply - Agent 的最终回复
+ * @param turnToolCalls - 本轮使用的工具调用列表
+ * @returns 无返回值
  */
 async function saveSessionMemory(
   sessionKey: string,

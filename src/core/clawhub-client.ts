@@ -21,6 +21,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ClawHubClient, ClawHubSearchResult, ClawHubSkillDetail } from "../types/index.js";
+import { ensureDir } from "../utils/fs.js";
 
 /** ClawHub API 基础 URL */
 const CLAWHUB_API = "https://clawhub.ai/api/v1";
@@ -28,7 +29,15 @@ const CLAWHUB_API = "https://clawhub.ai/api/v1";
 /**
  * 创建 ClawHub 客户端
  *
- * @param baseUrl - API 基础 URL（可选，默认使用 ClawHub 官方 API）
+ * 返回一个实现 ClawHubClient 接口的对象，包含 search/getDetail/download 方法。
+ * 如果 ClawHub API 不可用，可降级使用 searchLocalSkills 进行本地搜索。
+ *
+ * @param baseUrl - API 基础 URL（可选，默认 https://clawhub.ai/api/v1）
+ * @returns ClawHubClient 实例
+ *
+ * @example
+ *   const client = createClawHubClient();
+ *   const results = await client.search('web scraper', 10);
  */
 export function createClawHubClient(baseUrl: string = CLAWHUB_API): ClawHubClient {
   /**
@@ -93,9 +102,7 @@ export function createClawHubClient(baseUrl: string = CLAWHUB_API): ClawHubClien
       for (const file of files) {
         const filePath = path.join(skillsDir, file.path);
         const fileDir = path.dirname(filePath);
-        if (!fs.existsSync(fileDir)) {
-          fs.mkdirSync(fileDir, { recursive: true });
-        }
+        ensureDir(fileDir);
         fs.writeFileSync(filePath, file.content, "utf-8");
       }
 
@@ -123,6 +130,11 @@ export function createClawHubClient(baseUrl: string = CLAWHUB_API): ClawHubClien
 
 /**
  * 查找项目根目录（包含 package.json 的目录）
+ *
+ * 从当前工作目录向上遍历，找到第一个包含 package.json 的目录。
+ * 如果找不到，返回当前工作目录。
+ *
+ * @returns 项目根目录的绝对路径
  */
 function findProjectRoot(): string {
   let dir = process.cwd();
@@ -139,9 +151,15 @@ function findProjectRoot(): string {
  * 本地技能搜索（不依赖网络）
  *
  * 当 ClawHub API 不可用时，回退到本地技能目录搜索。
+ * 通过读取每个技能目录下的 SKILL.md 文件，匹配名称、描述和内容。
  *
- * @param skillsRoot - 技能目录路径
- * @param query - 搜索关键词
+ * @param skillsRoot - 技能根目录路径
+ * @param query - 搜索关键词（空字符串时返回所有技能）
+ * @returns 匹配的本地技能列表
+ *
+ * @example
+ *   const local = searchLocalSkills('./skills', 'file');
+ *   console.log(local.length); // 匹配 "file" 的本地技能数
  */
 export function searchLocalSkills(
   skillsRoot: string,
