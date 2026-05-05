@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file index.ts — 统一导出（Barrel File）
  * @description
  *   作为项目的公共入口，将所有模块的公开 API 统一导出。
@@ -94,3 +94,16 @@ export { generateProposals, formatProposals } from "./core/self-opt/proposal-eng
 export { runProposalTests, formatTestResults, executeOptimization } from "./core/self-opt/self-test-runner.js";
 export { generateFixDiff } from "./core/self-opt/diff-generator.js";
 export type * from "./core/self-opt/types.js";
+// 导出 Phase 5.2: 运行时错误收集 + 分析
+export { collectError, collectErrors, getRecentErrors, detectFrequentErrors } from "./core/self-opt/runtime-error-collector.js";
+export { analyzeErrors, injectErrorsIntoInspection } from "./core/self-opt/error-analyzer.js";
+export type { RuntimeErrorRecord, ErrorContext, ErrorLogConfig } from "./core/self-opt/runtime-error-collector.js";
+export type { ErrorAnalysis, ErrorCluster, ErrorCategory } from "./core/self-opt/error-analyzer.js";
+// 导出 Phase 5.3: 优化历史学习器 + 回归测试
+export { learnFromHistory, parseOptimizationLog, formatLearningResult } from "./core/self-opt/optimization-learner.js";
+export { runRegressionTest } from "./core/self-opt/self-test-runner.js";
+export type { LearningInsight, LearningResult, TemplateStats, Evidence, InsightType, InsightAction } from "./core/self-opt/optimization-learner.js";
+export type { RegressionTestResult } from "./core/self-opt/self-test-runner.js";
+// 导出 Phase 5.4: 确认管理器 + Git 快照增强 + Diff 改进 + Researcher 改进
+export { ConfirmationManager, createConfirmationManager } from "./core/self-opt/confirmation-manager.js";
+export type { ConfirmationItem, ConfirmationConfig } from "./core/self-opt/confirmation-manager.js";

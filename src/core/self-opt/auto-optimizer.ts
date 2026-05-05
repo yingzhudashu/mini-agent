@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file auto-optimizer.ts — 全自动优化编排器 (Phase 5)
  * @description
  *   Self-Optimization 子系统的 Phase 5 核心组件，负责串联整个自动优化流程：
@@ -43,8 +43,14 @@ import {
   revertToSnapshot,
   finalizeSnapshot,
   isInGitRepo,
+  type SnapshotInfo,
 } from "./git-snapshot.js";
 import { generateFixDiff } from "./diff-generator.js";
+import {
+  logOptimizeStart,
+  logOptimizeComplete,
+  logProposalExecuted,
+} from "./structured-logger.js";
 
 // ============================================================================
 // 配置
@@ -154,7 +160,7 @@ interface ExecResult {
   proposal: OptimizationProposal;
   /** 优化执行结果 */
   result: OptimizationResult;
-  /** Git 快照哈希（执行前） */
+  /** Git 快照分支名（执行前） */
   gitSnapshot?: string;
   /** 是否已回滚 */
   reverted: boolean;
@@ -224,13 +230,13 @@ async function execProposal(
   srcDir: string,
   useGit: boolean
 ): Promise<ExecResult> {
-  let snap: string | null = null;
+  let snap: SnapshotInfo | null = null;
 
   // ── Step 1: 创建 Git 快照 ──
   if (useGit) {
     console.log(`  📸 创建快照: ${p.target}`);
     snap = await createSnapshot(cwd, `pre-${p.target}`);
-    if (snap) console.log(`  📸 ${snap.slice(0, 8)}`);
+    if (snap) console.log(`  分支: ${snap.branchName}`);
   }
 
   // ── Step 2: 确保有文件变更 ──
@@ -278,7 +284,7 @@ async function execProposal(
   return {
     proposal: p,
     result,
-    gitSnapshot: snap ?? undefined,
+    gitSnapshot: snap?.branchName,
     reverted: result.reverted,
   };
 }
@@ -376,6 +382,9 @@ export async function autoOptimize(
     `  总计: ${proposals.length}, 自动: ${auto.length}, 跳过: ${skipped.length}`
   );
 
+  // ── Step 3.5: 记录开始 ──
+  logOptimizeStart(projectRoot, proposals.length);
+
   // ── Step 4: 执行提案 ──
   const useGit = await isInGitRepo(projectRoot);
   const executed: ExecResult[] = [];
@@ -388,7 +397,7 @@ export async function autoOptimize(
     const r = await execProposal(auto[i], projectRoot, srcDir, useGit);
     executed.push(r);
 
-    // 记录到日志
+    // 记录到日志（双写：旧格式 + 结构化）
     appendOptimizationLog(projectRoot, {
       result: r.result,
       proposal: {
@@ -399,19 +408,21 @@ export async function autoOptimize(
         riskLevel: r.proposal.riskLevel,
       },
     });
+    logProposalExecuted(projectRoot, r.result);
 
     console.log(
       `  ${r.result.status === "success" ? "✅" : "❌"} ${r.result.lesson}`
     );
     if (r.gitSnapshot) {
-      console.log(`  📸 快照: ${r.gitSnapshot.slice(0, 8)}`);
+      console.log(`  快照: ${r.gitSnapshot}`);
     }
   }
 
-  // ── Step 5: 生成摘要 ──
+  // ── Step 5: 记录完成 + 生成摘要 ──
   const ok = executed.filter((e) => e.result.status === "success").length;
   const fail = executed.filter((e) => e.result.status === "failed").length;
   const rv = executed.filter((e) => e.result.reverted).length;
+  logOptimizeComplete(projectRoot, executed.length, ok, fail, rv);
   const summary =
     `执行 ${executed.length}，成功 ${ok}，失败 ${fail}，回滚 ${rv}` +
     (skipped.length > 0 ? `，${skipped.length} 个跳过` : "");
@@ -475,7 +486,7 @@ export function formatAutoOptimizeResult(r: AutoOptimizeResult): string {
       `     测试: ${e.result.testSummary.passed}/${e.result.testSummary.total}`
     );
     if (e.gitSnapshot) {
-      lines.push(`     快照: ${e.gitSnapshot.slice(0, 8)}`);
+      lines.push(`     快照: ${e.gitSnapshot}`);
     }
   }
 

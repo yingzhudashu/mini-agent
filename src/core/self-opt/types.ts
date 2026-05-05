@@ -183,6 +183,18 @@ export interface ArchitectureCheck {
 }
 
 /**
+ * 痛点项（静态分析或运行时错误发现）
+ */
+export interface PainPoint {
+  /** 痛点描述 */
+  description: string;
+  /** 严重程度 */
+  severity: "low" | "medium" | "high";
+  /** 证据来源 */
+  evidence: string;
+}
+
+/**
  * 自我审视报告
  *
  * 由 Inspector 生成，包含代码质量、架构完整性、痛点分析。
@@ -199,11 +211,7 @@ export interface InspectionReport {
   /** 架构完整性检查 */
   architectureChecks: ArchitectureCheck[];
   /** 痛点列表（高频失败、循环检测触发等） */
-  painPoints: {
-    description: string;
-    severity: "low" | "medium" | "high";
-    evidence: string;
-  }[];
+  painPoints: PainPoint[];
   /** 优化建议（初步） */
   suggestions: string[];
   /** 总评 */

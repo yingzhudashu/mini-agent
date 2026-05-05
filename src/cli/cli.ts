@@ -71,6 +71,7 @@ import { researchExternal } from "../core/self-opt/researcher.js";
 import { generateProposals, formatProposals } from "../core/self-opt/proposal-engine.js";
 import { runProposalTests, formatTestResults, executeOptimization } from "../core/self-opt/self-test-runner.js";
 import { autoOptimize, formatAutoOptimizeResult } from "../core/self-opt/auto-optimizer.js";
+import { generateDashboard, formatDashboard } from "../core/self-opt/metrics.js";
 import { startFeishuPollServer } from "../feishu/poll-server.js";
 import type { FeishuConfig } from "../types/index.js";
 import { createFeishuHandler } from "../feishu/agent-handler.js";
@@ -531,12 +532,10 @@ async function main() {
           const projectRoot = path.resolve(__dirname, "..");
           const result = await autoOptimize(srcDir, projectRoot);
           outputManager.write(formatAutoOptimizeResult(result));
-        } else if (subCmd === "propose") {
-          outputManager.write("\n📋 生成优化提案...");
-          const inspectReport = await inspectSelf(srcDir);
-          const researchReport = await researchExternal();
-          const proposals = generateProposals(inspectReport, researchReport);
-          outputManager.write(formatProposals(proposals));
+        } else if (subCmd === "status") {
+          outputManager.write("\n📊 生成优化仪表盘...");
+          const dashboard = await generateDashboard(projectRoot);
+          outputManager.write(formatDashboard(dashboard));
         } else if (subCmd === "propose") {
           outputManager.write("\n📋 生成优化提案...");
           const inspectReport = await inspectSelf(srcDir);
@@ -556,7 +555,7 @@ async function main() {
           outputManager.writeLines(["", "═══════════════════════════════════════════════════", "📋 自我优化完成", "═══════════════════════════════════════════════════"]);
           outputManager.write(`📝 架构: ${inspectReport.summary}`);
           outputManager.write(`🌐 调研: ${researchReport.summary}`);
-          outputManager.writeLines(["", "💡 子命令:", "  .optimize inspect   — 完整审视报告", "  .optimize research  — 完整调研报告", "  .optimize propose   — 生成优化提案", "  .optimize auto      — 全自动优化"]);
+          outputManager.writeLines(["", "💡 子命令:", "  .optimize inspect   — 完整审视报告", "  .optimize research  — 完整调研报告", "  .optimize propose   — 生成优化提案", "  .optimize auto      — 全自动优化", "  .optimize status    — 优化指标仪表盘"]);
         }
       } catch (err: any) { outputManager.write(`\n❌ 自我优化失败: ${err?.message ?? err}`); }
       finally { outputManager.endOutput(); }
